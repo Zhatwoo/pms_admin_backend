@@ -5,11 +5,16 @@ import { UpsertClientDto } from './dto/upsert-client.dto';
 import { CreateClientDto } from './dto/create-client.dto';
 import { AdminUser, Prisma } from '../../../generated/prisma/client';
 
+import { PmsSaasService } from './pms-saas.service';
+import { MailService } from '../mail/mail.service';
+
 @Injectable()
 export class ClientsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditLogs: AuditLogsService,
+    private readonly pmsSaasService: PmsSaasService,
+    private readonly mailService: MailService,
   ) {}
 
   findAll(search?: string) {
@@ -142,7 +147,36 @@ export class ClientsService {
       metadata: { companyName: client.companyName, subdomain: dto.subdomain },
     });
 
-    return client;
+    // Automatically create Superadmin account on PMS SaaS database & send credentials email
+    const saasResult = await this.pmsSaasService.createSuperAdminAccount({
+      companyName: client.companyName,
+      contactName: client.contactName,
+      contactEmail: client.contactEmail,
+      contactPhone: client.contactPhone,
+      subdomain: dto.subdomain,
+    });
+
+    let emailSent = false;
+    if (saasResult.success && saasResult.defaultPassword) {
+      emailSent = await this.mailService.sendSuperAdminCredentials({
+        toEmail: client.contactEmail,
+        contactName: client.contactName,
+        companyName: client.companyName,
+        subdomain: dto.subdomain,
+        defaultPassword: saasResult.defaultPassword,
+      });
+    }
+
+    return {
+      ...client,
+      superadminAccount: {
+        created: saasResult.success,
+        email: client.contactEmail,
+        defaultPassword: saasResult.defaultPassword,
+        emailSent,
+        error: saasResult.error,
+      },
+    };
   }
 
   async upsertForTenant(
