@@ -9,7 +9,11 @@ export class AuditLogsController {
   constructor(private readonly auditLogsService: AuditLogsService) {}
 
   @Get()
-  findAll(@Query() query: PaginationDto) {
-    return this.auditLogsService.findAll(query);
+  findAll(
+    @Query() query: PaginationDto,
+    @Query('action') action?: string,
+    @Query('resourceType') resourceType?: string,
+  ) {
+    return this.auditLogsService.findAll({ ...query, action, resourceType });
   }
 }

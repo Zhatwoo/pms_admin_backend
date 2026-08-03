@@ -21,6 +21,24 @@ export class SubscriptionsService {
     return this.prisma.subscriptionPlan.findMany({ orderBy: { priceMonthly: 'asc' } });
   }
 
+  async updatePlan(id: string, dto: Partial<CreatePlanDto>) {
+    const plan = await this.prisma.subscriptionPlan.findUnique({ where: { id } });
+    if (!plan) throw new NotFoundException('Subscription plan not found');
+    return this.prisma.subscriptionPlan.update({ where: { id }, data: dto });
+  }
+
+  async removePlan(id: string) {
+    const plan = await this.prisma.subscriptionPlan.findUnique({
+      where: { id },
+      include: { _count: { select: { subscriptions: true } } },
+    });
+    if (!plan) throw new NotFoundException('Subscription plan not found');
+    if (plan._count.subscriptions > 0) {
+      throw new ConflictException('Cannot delete plan with active subscriptions assigned');
+    }
+    await this.prisma.subscriptionPlan.delete({ where: { id } });
+  }
+
   async createSubscription(dto: CreateSubscriptionDto, actor: AdminUser) {
     const [tenant, plan] = await Promise.all([
       this.prisma.tenant.findUnique({ where: { id: dto.tenantId } }),
@@ -90,5 +108,9 @@ export class SubscriptionsService {
     });
 
     return subscription;
+  }
+
+  async cancel(id: string, actor: AdminUser) {
+    return this.update(id, { status: 'canceled' }, actor);
   }
 }

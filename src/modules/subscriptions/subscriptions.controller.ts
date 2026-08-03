@@ -1,10 +1,14 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   Patch,
   Post,
+  Put,
   UseGuards,
 } from '@nestjs/common';
 import { AuthGuard } from '../auth/guards/auth.guard';
@@ -30,6 +34,17 @@ export class SubscriptionsController {
     return this.subscriptionsService.findAllPlans();
   }
 
+  @Put('plans/:id')
+  updatePlan(@Param('id') id: string, @Body() dto: Partial<CreatePlanDto>) {
+    return this.subscriptionsService.updatePlan(id, dto);
+  }
+
+  @Delete('plans/:id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  removePlan(@Param('id') id: string) {
+    return this.subscriptionsService.removePlan(id);
+  }
+
   @Post()
   create(@Body() dto: CreateSubscriptionDto, @CurrentAdminUser() actor: AdminUser) {
     return this.subscriptionsService.createSubscription(dto, actor);
@@ -52,5 +67,10 @@ export class SubscriptionsController {
     @CurrentAdminUser() actor: AdminUser,
   ) {
     return this.subscriptionsService.update(id, dto, actor);
+  }
+
+  @Post(':id/cancel')
+  cancel(@Param('id') id: string, @CurrentAdminUser() actor: AdminUser) {
+    return this.subscriptionsService.cancel(id, actor);
   }
 }
