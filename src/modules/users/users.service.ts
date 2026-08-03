@@ -61,6 +61,13 @@ export class UsersService {
     return this.prisma.adminUser.findMany({ orderBy: { createdAt: 'desc' } });
   }
 
+  findAllTenantUsers() {
+    return this.prisma.tenantUser.findMany({
+      orderBy: { createdAt: 'desc' },
+      include: { tenant: { select: { id: true, name: true, subdomain: true } } },
+    });
+  }
+
   async findOne(id: string) {
     const user = await this.prisma.adminUser.findUnique({ where: { id } });
     if (!user) {

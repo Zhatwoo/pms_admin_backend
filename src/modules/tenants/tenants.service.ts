@@ -5,6 +5,8 @@ import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import { CreateTenantDto } from './dto/create-tenant.dto';
 import { QueryTenantDto } from './dto/query-tenant.dto';
 import { UpdateTenantDto } from './dto/update-tenant.dto';
+import { CreateBranchDto } from './dto/create-branch.dto';
+import { CreateTenantUserDto } from './dto/create-tenant-user.dto';
 
 @Injectable()
 export class TenantsService {
@@ -14,14 +16,33 @@ export class TenantsService {
   ) {}
 
   async create(dto: CreateTenantDto, actor: AdminUser) {
+    const { companyName, contactName, contactEmail, contactPhone, billingAddress, ...tenantData } = dto;
     const existing = await this.prisma.tenant.findUnique({
-      where: { subdomain: dto.subdomain },
+      where: { subdomain: tenantData.subdomain },
     });
     if (existing) {
       throw new ConflictException('Subdomain is already taken');
     }
 
-    const tenant = await this.prisma.tenant.create({ data: dto });
+    const tenant = await this.prisma.tenant.create({
+      data: {
+        ...tenantData,
+        ...(companyName && contactName && contactEmail
+          ? {
+              client: {
+                create: {
+                  companyName,
+                  contactName,
+                  contactEmail,
+                  contactPhone,
+                  billingAddress,
+                },
+              },
+            }
+          : {}),
+      },
+      include: { client: true },
+    });
 
     await this.auditLogs.record({
       actorId: actor.id,
@@ -52,6 +73,7 @@ export class TenantsService {
         skip: (query.page - 1) * query.limit,
         take: query.limit,
         include: {
+          client: true,
           _count: { select: { branches: true, users: true } },
           subscriptions: {
             orderBy: { createdAt: 'desc' },
@@ -72,6 +94,7 @@ export class TenantsService {
         createdAt: tenant.createdAt,
         userCount: tenant._count.users,
         branchCount: tenant._count.branches,
+        client: tenant.client,
         subscriptionPlan: tenant.subscriptions[0]?.plan.name ?? null,
         subscriptionStatus: tenant.subscriptions[0]?.status ?? null,
       })),
@@ -88,9 +111,11 @@ export class TenantsService {
     const tenant = await this.prisma.tenant.findUnique({
       where: { id },
       include: {
-        branches: true,
+        client: true,
+        branches: { orderBy: { createdAt: 'desc' } },
+        users: { orderBy: { createdAt: 'desc' } },
         subscriptions: { include: { plan: true }, orderBy: { createdAt: 'desc' } },
-        _count: { select: { users: true, customers: true } },
+        _count: { select: { users: true, customers: true, branches: true } },
       },
     });
     if (!tenant) {
@@ -126,6 +151,129 @@ export class TenantsService {
       resourceType: 'tenant',
       resourceId: tenant.id,
       metadata: { name: tenant.name },
+    });
+  }
+
+  // --- Branches Management ---
+  async findBranches(tenantId: string) {
+    await this.ensureExists(tenantId);
+    return this.prisma.branch.findMany({
+      where: { tenantId },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async addBranch(tenantId: string, dto: CreateBranchDto, actor: AdminUser) {
+    await this.ensureExists(tenantId);
+    const branch = await this.prisma.branch.create({
+      data: { tenantId, name: dto.name },
+    });
+
+    await this.auditLogs.record({
+      actorId: actor.id,
+      actorEmail: actor.email,
+      action: 'create',
+      resourceType: 'branch',
+      resourceId: branch.id,
+      metadata: { tenantId, name: branch.name },
+    });
+
+    return branch;
+  }
+
+  async removeBranch(tenantId: string, branchId: string, actor: AdminUser) {
+    await this.ensureExists(tenantId);
+    const branch = await this.prisma.branch.findFirst({
+      where: { id: branchId, tenantId },
+    });
+    if (!branch) {
+      throw new NotFoundException(`Branch ${branchId} not found under tenant ${tenantId}`);
+    }
+
+    await this.prisma.branch.delete({ where: { id: branchId } });
+
+    await this.auditLogs.record({
+      actorId: actor.id,
+      actorEmail: actor.email,
+      action: 'delete',
+      resourceType: 'branch',
+      resourceId: branch.id,
+      metadata: { tenantId, name: branch.name },
+    });
+  }
+
+  // --- Tenant Users Management ---
+  async findUsers(tenantId: string) {
+    await this.ensureExists(tenantId);
+    return this.prisma.tenantUser.findMany({
+      where: { tenantId },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async addUser(tenantId: string, dto: CreateTenantUserDto, actor: AdminUser) {
+    await this.ensureExists(tenantId);
+    const existing = await this.prisma.tenantUser.findUnique({
+      where: { tenantId_email: { tenantId, email: dto.email } },
+    });
+    if (existing) {
+      throw new ConflictException(`User ${dto.email} already exists in this tenant.`);
+    }
+
+    const user = await this.prisma.tenantUser.create({
+      data: { tenantId, email: dto.email, fullName: dto.fullName },
+    });
+
+    await this.auditLogs.record({
+      actorId: actor.id,
+      actorEmail: actor.email,
+      action: 'create',
+      resourceType: 'tenant_user',
+      resourceId: user.id,
+      metadata: { tenantId, email: user.email },
+    });
+
+    return user;
+  }
+
+  async removeUser(tenantId: string, userId: string, actor: AdminUser) {
+    await this.ensureExists(tenantId);
+    const user = await this.prisma.tenantUser.findFirst({
+      where: { id: userId, tenantId },
+    });
+    if (!user) {
+      throw new NotFoundException(`Tenant user ${userId} not found under tenant ${tenantId}`);
+    }
+
+    await this.prisma.tenantUser.delete({ where: { id: userId } });
+
+    await this.auditLogs.record({
+      actorId: actor.id,
+      actorEmail: actor.email,
+      action: 'delete',
+      resourceType: 'tenant_user',
+      resourceId: user.id,
+      metadata: { tenantId, email: user.email },
+    });
+  }
+
+  // --- Customers & Transactions ---
+  async findCustomers(tenantId: string) {
+    await this.ensureExists(tenantId);
+    return this.prisma.customer.findMany({
+      where: { tenantId },
+      include: { _count: { select: { transactions: true } } },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async findTransactions(tenantId: string) {
+    await this.ensureExists(tenantId);
+    return this.prisma.transaction.findMany({
+      where: { customer: { tenantId } },
+      include: { customer: { select: { id: true, name: true } } },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
     });
   }
 

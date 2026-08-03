@@ -34,14 +34,23 @@ export class AuditLogsService {
     });
   }
 
-  async findAll(query: PaginationDto) {
+  async findAll(query: PaginationDto & { action?: string; resourceType?: string }) {
+    const where: Prisma.AuditLogWhereInput = {};
+    if (query.action) {
+      where.action = query.action as AuditAction;
+    }
+    if (query.resourceType) {
+      where.resourceType = { contains: query.resourceType, mode: 'insensitive' };
+    }
+
     const [data, total] = await Promise.all([
       this.prisma.auditLog.findMany({
+        where,
         orderBy: { createdAt: 'desc' },
         skip: (query.page - 1) * query.limit,
         take: query.limit,
       }),
-      this.prisma.auditLog.count(),
+      this.prisma.auditLog.count({ where }),
     ]);
 
     return {

@@ -35,6 +35,11 @@ export class UsersController {
     return this.usersService.findAll();
   }
 
+  @Get('tenant-users')
+  findAllTenantUsers() {
+    return this.usersService.findAllTenantUsers();
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.usersService.findOne(id);

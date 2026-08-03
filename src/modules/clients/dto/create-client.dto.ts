@@ -1,9 +1,13 @@
-import { IsEmail, IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import { IsEmail, IsNotEmpty, IsOptional, IsString, Matches } from 'class-validator';
 
-export class UpsertClientDto {
+export class CreateClientDto {
   @IsString()
   @IsNotEmpty()
   companyName: string;
+
+  @IsString()
+  @IsNotEmpty()
+  subdomain: string;
 
   @IsString()
   @IsNotEmpty()
@@ -19,4 +23,8 @@ export class UpsertClientDto {
   @IsOptional()
   @IsString()
   billingAddress?: string;
+
+  @IsOptional()
+  @IsString()
+  tenantId?: string;
 }

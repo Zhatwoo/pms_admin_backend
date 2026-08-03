@@ -1,8 +1,9 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
-import { AdminUser } from '../../../generated/prisma/client';
+import { AdminUser, InvoiceStatus, Prisma } from '../../../generated/prisma/client';
 import { PaginationDto } from '../../common/dto/pagination.dto';
+import { CreateInvoiceDto } from './dto/create-invoice.dto';
 
 @Injectable()
 export class BillingService {
@@ -11,21 +12,35 @@ export class BillingService {
     private readonly auditLogs: AuditLogsService,
   ) {}
 
-  async findAll(query: PaginationDto) {
+  async findAll(query: PaginationDto & { status?: string; tenantId?: string }) {
+    const where: Prisma.InvoiceWhereInput = {};
+    if (query.status) {
+      where.status = query.status as InvoiceStatus;
+    }
+    if (query.tenantId) {
+      where.tenantId = query.tenantId;
+    }
+
     const [data, total] = await Promise.all([
       this.prisma.invoice.findMany({
+        where,
         orderBy: { createdAt: 'desc' },
         skip: (query.page - 1) * query.limit,
         take: query.limit,
-        include: { subscription: { include: { tenant: true, plan: true } } },
+        include: {
+          subscription: { include: { tenant: { include: { client: true } }, plan: true } },
+        },
       }),
-      this.prisma.invoice.count(),
+      this.prisma.invoice.count({ where }),
     ]);
 
     return {
       data: data.map((invoice) => ({
         id: invoice.id,
+        tenantId: invoice.tenantId,
         tenant: invoice.subscription.tenant.name,
+        companyName: invoice.subscription.tenant.client?.companyName ?? null,
+        contactEmail: invoice.subscription.tenant.client?.contactEmail ?? null,
         plan: invoice.subscription.plan.name,
         amount: invoice.amount,
         status: invoice.status,
@@ -40,6 +55,43 @@ export class BillingService {
         totalPages: Math.ceil(total / query.limit),
       },
     };
+  }
+
+  async createInvoice(dto: CreateInvoiceDto, actor: AdminUser) {
+    const sub = await this.prisma.subscription.findUnique({
+      where: { id: dto.subscriptionId },
+      include: { tenant: true, plan: true },
+    });
+    if (!sub) {
+      throw new NotFoundException(`Subscription with id ${dto.subscriptionId} not found`);
+    }
+
+    const now = new Date();
+    const periodStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+    const periodEnd = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0));
+
+    const invoice = await this.prisma.invoice.create({
+      data: {
+        subscriptionId: sub.id,
+        tenantId: sub.tenantId,
+        amount: dto.amount,
+        status: dto.status ?? 'pending',
+        periodStart,
+        periodEnd,
+      },
+      include: { subscription: { include: { tenant: true, plan: true } } },
+    });
+
+    await this.auditLogs.record({
+      actorId: actor.id,
+      actorEmail: actor.email,
+      action: 'create',
+      resourceType: 'invoice',
+      resourceId: invoice.id,
+      metadata: { tenantId: sub.tenantId, amount: dto.amount },
+    });
+
+    return invoice;
   }
 
   /** Generates one pending invoice per active subscription for the current period, skipping ones already generated. */

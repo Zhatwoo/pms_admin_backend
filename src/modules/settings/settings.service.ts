@@ -10,6 +10,10 @@ const DEFAULTS: Record<string, Prisma.JsonValue> = {
   supportEmail: 'support@pms-saas.com',
   enforce2FA: false,
   dataResidency: 'us-east-1',
+  taxRate: 12,
+  currencySymbol: '$',
+  invoiceHeaderNotes: 'Thank you for your business!',
+  defaultTrialDays: 14,
 };
 
 @Injectable()

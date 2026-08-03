@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsString, Matches } from 'class-validator';
+import { IsEmail, IsNotEmpty, IsOptional, IsString, Matches } from 'class-validator';
 
 export class CreateTenantDto {
   @IsString()
@@ -6,9 +6,26 @@ export class CreateTenantDto {
   name: string;
 
   @IsString()
-  @Matches(/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/, {
-    message:
-      'subdomain must be lowercase alphanumeric, optionally hyphenated',
-  })
+  @IsNotEmpty()
   subdomain: string;
+
+  @IsOptional()
+  @IsString()
+  companyName?: string;
+
+  @IsOptional()
+  @IsString()
+  contactName?: string;
+
+  @IsOptional()
+  @IsEmail()
+  contactEmail?: string;
+
+  @IsOptional()
+  @IsString()
+  contactPhone?: string;
+
+  @IsOptional()
+  @IsString()
+  billingAddress?: string;
 }
