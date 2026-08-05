@@ -103,7 +103,7 @@ export class TenantsService {
           subscriptions: {
             orderBy: { createdAt: 'desc' },
             take: 1,
-            include: { plan: true },
+            include: { planVersion: { include: { plan: true } } },
           },
         },
       }),
@@ -120,7 +120,7 @@ export class TenantsService {
         userCount: tenant._count.users,
         branchCount: tenant._count.branches,
         client: tenant.client,
-        subscriptionPlan: tenant.subscriptions[0]?.plan.name ?? null,
+        subscriptionPlan: tenant.subscriptions[0]?.planVersion?.plan?.name ?? null,
         subscriptionStatus: tenant.subscriptions[0]?.status ?? null,
       })),
       meta: {
@@ -139,7 +139,7 @@ export class TenantsService {
         client: true,
         branches: { orderBy: { createdAt: 'desc' } },
         users: { orderBy: { createdAt: 'desc' } },
-        subscriptions: { include: { plan: true }, orderBy: { createdAt: 'desc' } },
+        subscriptions: { include: { planVersion: { include: { plan: true } } }, orderBy: { createdAt: 'desc' } },
         _count: { select: { users: true, customers: true, branches: true } },
       },
     });

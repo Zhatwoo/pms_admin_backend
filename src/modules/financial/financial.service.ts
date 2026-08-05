@@ -8,7 +8,11 @@ export class FinancialService {
   async getRevenueReport() {
     const invoices = await this.prisma.invoice.findMany({
       where: { status: 'paid' },
-      include: { subscription: { include: { plan: true, tenant: true } } },
+      include: {
+        subscription: {
+          include: { planVersion: { include: { plan: true } }, tenant: true },
+        },
+      },
     });
 
     const byMonth = new Map<string, number>();
@@ -21,7 +25,7 @@ export class FinancialService {
 
       byMonth.set(monthKey, (byMonth.get(monthKey) ?? 0) + amount);
 
-      const planName = invoice.subscription.plan.name;
+      const planName = invoice.subscription.planVersion.plan.name;
       byPlan.set(planName, (byPlan.get(planName) ?? 0) + amount);
 
       const tenantName = invoice.subscription.tenant.name;
