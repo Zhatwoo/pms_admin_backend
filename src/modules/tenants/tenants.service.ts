@@ -8,11 +8,16 @@ import { UpdateTenantDto } from './dto/update-tenant.dto';
 import { CreateBranchDto } from './dto/create-branch.dto';
 import { CreateTenantUserDto } from './dto/create-tenant-user.dto';
 
+import { PmsSaasService } from '../clients/pms-saas.service';
+import { MailService } from '../mail/mail.service';
+
 @Injectable()
 export class TenantsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditLogs: AuditLogsService,
+    private readonly pmsSaasService: PmsSaasService,
+    private readonly mailService: MailService,
   ) {}
 
   async create(dto: CreateTenantDto, actor: AdminUser) {
@@ -52,6 +57,26 @@ export class TenantsService {
       resourceId: tenant.id,
       metadata: { name: tenant.name, subdomain: tenant.subdomain },
     });
+
+    if (companyName && contactName && contactEmail) {
+      const saasResult = await this.pmsSaasService.createSuperAdminAccount({
+        companyName,
+        contactName,
+        contactEmail,
+        contactPhone,
+        subdomain: tenant.subdomain,
+      });
+
+      if (saasResult.success && saasResult.defaultPassword) {
+        await this.mailService.sendSuperAdminCredentials({
+          toEmail: contactEmail,
+          contactName,
+          companyName,
+          subdomain: tenant.subdomain,
+          defaultPassword: saasResult.defaultPassword,
+        });
+      }
+    }
 
     return tenant;
   }

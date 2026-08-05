@@ -18,6 +18,8 @@ import { SettingsModule } from './modules/settings/settings.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { SupabaseModule } from './supabase/supabase.module';
 
+import { MailModule } from './modules/mail/mail.module';
+
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -27,6 +29,7 @@ import { SupabaseModule } from './supabase/supabase.module';
     }),
     PrismaModule,
     SupabaseModule,
+    MailModule,
     HealthModule,
     AuthModule,
     AuditLogsModule,
