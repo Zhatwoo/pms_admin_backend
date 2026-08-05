@@ -68,7 +68,7 @@ export class ClientsService {
             branches: { orderBy: { createdAt: 'desc' } },
             users: { orderBy: { createdAt: 'desc' } },
             subscriptions: {
-              include: { plan: true },
+              include: { planVersion: { include: { plan: true } } },
               orderBy: { createdAt: 'desc' },
             },
             _count: { select: { customers: true, branches: true, users: true } },
@@ -83,7 +83,7 @@ export class ClientsService {
 
     const invoices = await this.prisma.invoice.findMany({
       where: { tenantId: client.tenantId },
-      include: { subscription: { include: { plan: true } } },
+      include: { subscription: { include: { planVersion: { include: { plan: true } } } } },
       orderBy: { createdAt: 'desc' },
       take: 20,
     });

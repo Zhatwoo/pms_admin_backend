@@ -135,6 +135,7 @@ export class PmsSaasService {
         account_status: 'active',
         is_developer: false,
         environment: 'production',
+        onboarding_completed: false,
         created_by: authId,
       };
 
