@@ -83,7 +83,7 @@ model AdminUser {
 model Tenant {
   id            String         @id @default(uuid())
   name          String
-  subdomain     String         @unique
+  subdomain     String?        @unique
   status        TenantStatus   @default(pending)
   createdAt     DateTime       @default(now()) @map("created_at")
   updatedAt     DateTime       @updatedAt @map("updated_at")
@@ -99,15 +99,19 @@ model Tenant {
 
 /// The corporate/billing entity behind a tenant (contact person, billing address).
 model Client {
-  id            String   @id @default(uuid())
-  tenantId      String   @unique @map("tenant_id")
-  companyName   String   @map("company_name")
-  contactName   String   @map("contact_name")
-  contactEmail  String   @map("contact_email")
-  contactPhone  String?  @map("contact_phone")
-  billingAddress String? @map("billing_address")
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
+  id                 String    @id @default(uuid())
+  tenantId           String    @unique @map("tenant_id")
+  companyName        String    @map("company_name")
+  contactName        String    @map("contact_name")
+  contactEmail       String    @map("contact_email")
+  contactPhone       String?   @map("contact_phone")
+  mobileNumber       String?   @map("mobile_number")
+  telephoneNumber    String?   @map("telephone_number")
+  billingAddress     String?   @map("billing_address")
+  welcomeEmailSentAt DateTime? @map("welcome_email_sent_at")
+  welcomeEmailCount  Int       @default(0) @map("welcome_email_count")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 

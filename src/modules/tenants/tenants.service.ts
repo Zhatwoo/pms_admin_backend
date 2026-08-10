@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, AdminUser } from '../../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
@@ -58,7 +58,7 @@ export class TenantsService {
       metadata: { name: tenant.name, subdomain: tenant.subdomain },
     });
 
-    if (companyName && contactName && contactEmail) {
+    if (companyName && contactName && contactEmail && tenant.subdomain) {
       const saasResult = await this.pmsSaasService.createSuperAdminAccount({
         companyName,
         contactName,
@@ -190,6 +190,25 @@ export class TenantsService {
 
   async addBranch(tenantId: string, dto: CreateBranchDto, actor: AdminUser) {
     await this.ensureExists(tenantId);
+
+    const activeSub = await this.prisma.subscription.findFirst({
+      where: { tenantId, status: { in: ['active', 'trialing'] } },
+      include: { planVersion: { include: { plan: true } } },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (activeSub) {
+      if (activeSub.endsAt && new Date() > new Date(activeSub.endsAt)) {
+        throw new ForbiddenException('Tenant subscription has expired. Please renew to add branches.');
+      }
+      const currentBranchCount = await this.prisma.branch.count({ where: { tenantId } });
+      if (currentBranchCount >= activeSub.planVersion.branchLimit) {
+        throw new ForbiddenException(
+          `Branch creation limit (${activeSub.planVersion.branchLimit}) reached for subscription plan "${activeSub.planVersion.plan.name}". Upgrade plan to add more branches.`,
+        );
+      }
+    }
+
     const branch = await this.prisma.branch.create({
       data: { tenantId, name: dto.name },
     });
@@ -243,6 +262,24 @@ export class TenantsService {
     });
     if (existing) {
       throw new ConflictException(`User ${dto.email} already exists in this tenant.`);
+    }
+
+    const activeSub = await this.prisma.subscription.findFirst({
+      where: { tenantId, status: { in: ['active', 'trialing'] } },
+      include: { planVersion: { include: { plan: true } } },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (activeSub) {
+      if (activeSub.endsAt && new Date() > new Date(activeSub.endsAt)) {
+        throw new ForbiddenException('Tenant subscription has expired. Please renew to add staff users.');
+      }
+      const currentUserCount = await this.prisma.tenantUser.count({ where: { tenantId } });
+      if (currentUserCount >= activeSub.planVersion.userLimit) {
+        throw new ForbiddenException(
+          `Staff user creation limit (${activeSub.planVersion.userLimit}) reached for subscription plan "${activeSub.planVersion.plan.name}". Upgrade plan to add more users.`,
+        );
+      }
     }
 
     const user = await this.prisma.tenantUser.create({

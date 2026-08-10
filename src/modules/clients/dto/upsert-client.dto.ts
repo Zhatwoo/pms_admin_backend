@@ -1,9 +1,17 @@
-import { IsEmail, IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import { IsBoolean, IsEmail, IsNotEmpty, IsOptional, IsString } from 'class-validator';
 
 export class UpsertClientDto {
   @IsString()
   @IsNotEmpty()
   companyName: string;
+
+  @IsOptional()
+  @IsString()
+  subdomain?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  noDomain?: boolean;
 
   @IsString()
   @IsNotEmpty()
@@ -18,5 +26,17 @@ export class UpsertClientDto {
 
   @IsOptional()
   @IsString()
+  mobileNumber?: string;
+
+  @IsOptional()
+  @IsString()
+  telephoneNumber?: string;
+
+  @IsOptional()
+  @IsString()
   billingAddress?: string;
+
+  @IsOptional()
+  @IsString()
+  planId?: string;
 }

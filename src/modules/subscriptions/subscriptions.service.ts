@@ -10,15 +10,17 @@ import { CreateSubscriptionDto } from './dto/create-subscription.dto';
 import { QuerySubscriptionDto } from './dto/query-subscription.dto';
 import { UpdateSubscriptionDto } from './dto/update-subscription.dto';
 import { ChangePlanDto } from './dto/change-plan.dto';
+import { PmsSaasService } from '../clients/pms-saas.service';
 
 @Injectable()
 export class SubscriptionsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditLogs: AuditLogsService,
+    private readonly pmsSaasService: PmsSaasService,
   ) {}
 
-  async createSubscription(dto: CreateSubscriptionDto, actor: AdminUser) {
+  async createSubscription(dto: CreateSubscriptionDto, actor?: AdminUser) {
     const tenant = await this.prisma.tenant.findUnique({
       where: { id: dto.tenantId },
     });
@@ -51,19 +53,14 @@ export class SubscriptionsService {
     });
 
     if (existingActive) {
-      throw new ConflictException('Tenant already has an active or trialing subscription');
+      throw new ConflictException('Tenant already has an active subscription');
     }
 
     const now = new Date();
     const cycle = dto.billingCycle ?? 'monthly';
-    const endsAt = new Date(now);
-    if (cycle === 'annual') {
-      endsAt.setFullYear(endsAt.getFullYear() + 1);
-    } else {
-      endsAt.setMonth(endsAt.getMonth() + 1);
-    }
+    const durationDays = cycle === 'annual' ? 365 : 30;
+    const endsAt = new Date(now.getTime() + durationDays * 86400000);
 
-    // Get current usage counts for tenant
     const [branchCount, userCount] = await Promise.all([
       this.prisma.branch.count({ where: { tenantId: dto.tenantId } }),
       this.prisma.tenantUser.count({ where: { tenantId: dto.tenantId } }),
@@ -73,7 +70,7 @@ export class SubscriptionsService {
       data: {
         tenantId: dto.tenantId,
         planVersionId: activeVersion.id,
-        status: dto.status ?? (activeVersion.trialEnabled ? 'trialing' : 'active'),
+        status: activeVersion.trialEnabled ? 'trialing' : 'active',
         billingCycle: cycle,
         autoRenew: dto.autoRenew ?? true,
         startedAt: now,
@@ -96,14 +93,34 @@ export class SubscriptionsService {
       },
     });
 
-    await this.auditLogs.record({
-      actorId: actor.id,
-      actorEmail: actor.email,
-      action: 'create',
-      resourceType: 'subscription',
-      resourceId: subscription.id,
-      metadata: { tenantId: dto.tenantId, planId: dto.planId, versionId: activeVersion.id },
-    });
+    if (actor) {
+      await this.auditLogs.record({
+        actorId: actor.id,
+        actorEmail: actor.email,
+        action: 'create',
+        resourceType: 'subscription',
+        resourceId: subscription.id,
+        metadata: { tenantId: dto.tenantId, planId: dto.planId, versionId: activeVersion.id },
+      });
+    }
+
+    if (subscription.tenant?.subdomain) {
+      const fullVersion = await this.prisma.subscriptionPlanVersion.findUnique({
+        where: { id: activeVersion.id },
+        include: { features: true },
+      });
+      await this.pmsSaasService.syncPlanRestrictions({
+        subdomain: subscription.tenant.subdomain,
+        contactEmail: subscription.tenant.client?.contactEmail,
+        planName: plan.name,
+        branchLimit: activeVersion.branchLimit,
+        userLimit: activeVersion.userLimit,
+        storageGb: Number(activeVersion.storageGb),
+        features: fullVersion?.features.map((f) => f.name) ?? [],
+        status: subscription.status,
+        endsAt: subscription.endsAt,
+      });
+    }
 
     return subscription;
   }
@@ -373,6 +390,30 @@ export class SubscriptionsService {
       resourceId: id,
       metadata: { action: actionName, fromPlan: currentSub.planVersion.plan.name, toPlan: newPlan.name },
     });
+
+    const fullNewVer = await this.prisma.subscriptionPlanVersion.findUnique({
+      where: { id: newActiveVer.id },
+      include: { features: true },
+    });
+
+    const tenantWithClient = await this.prisma.tenant.findUnique({
+      where: { id: updated.tenantId },
+      include: { client: true },
+    });
+
+    if (tenantWithClient?.subdomain) {
+      await this.pmsSaasService.syncPlanRestrictions({
+        subdomain: tenantWithClient.subdomain,
+        contactEmail: tenantWithClient.client?.contactEmail,
+        planName: newPlan.name,
+        branchLimit: newActiveVer.branchLimit,
+        userLimit: newActiveVer.userLimit,
+        storageGb: Number(newActiveVer.storageGb),
+        features: fullNewVer?.features.map((f) => f.name) ?? [],
+        status: updated.status,
+        endsAt: updated.endsAt,
+      });
+    }
 
     return updated;
   }

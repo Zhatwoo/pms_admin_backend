@@ -8,6 +8,13 @@ export interface CreateSuperAdminParams {
   contactEmail: string;
   contactPhone?: string | null;
   subdomain: string;
+  planName?: string;
+  branchLimit?: number;
+  userLimit?: number;
+  storageGb?: number;
+  features?: string[];
+  status?: string;
+  endsAt?: Date | string | null;
 }
 
 export interface SuperAdminCreationResult {
@@ -81,6 +88,18 @@ export class PmsSaasService {
 
       let authId: string;
 
+      const appMetadata = {
+        role: 'super_admin',
+        subdomain: params.subdomain,
+        plan_name: params.planName ?? 'Standard',
+        branch_limit: params.branchLimit ?? 1,
+        user_limit: params.userLimit ?? 5,
+        storage_gb: params.storageGb ?? 5,
+        features: params.features ?? [],
+        status: params.status ?? 'active',
+        ends_at: params.endsAt ? new Date(params.endsAt).toISOString() : null,
+      };
+
       // 1. Create or update user in Supabase Auth on PMS SaaS project
       const { data: authData, error: createAuthError } =
         await this.saasSupabaseClient.auth.admin.createUser({
@@ -88,14 +107,14 @@ export class PmsSaasService {
           password: defaultPassword,
           email_confirm: true,
           user_metadata: { full_name: params.contactName },
-          app_metadata: { role: 'super_admin' },
+          app_metadata: appMetadata,
         });
 
       if (createAuthError) {
         // If user already exists in auth.users, update user password & role
         if (/already|registered|exists/i.test(createAuthError.message)) {
           this.logger.warn(`User ${email} already exists in Auth. Updating password and role...`);
-          const { data: usersData, error: listError } =
+          const { data: usersData } =
             await this.saasSupabaseClient.auth.admin.listUsers();
           
           const existingUser = (usersData?.users as Array<{ id: string; email?: string }> | undefined)?.find(
@@ -110,7 +129,7 @@ export class PmsSaasService {
             await this.saasSupabaseClient.auth.admin.updateUserById(authId, {
               password: defaultPassword,
               user_metadata: { full_name: params.contactName },
-              app_metadata: { role: 'super_admin' },
+              app_metadata: appMetadata,
             });
 
           if (updateAuthError) {
@@ -137,6 +156,12 @@ export class PmsSaasService {
         environment: 'production',
         onboarding_completed: false,
         created_by: authId,
+        subdomain: params.subdomain,
+        subscription_plan: params.planName,
+        branch_limit: params.branchLimit,
+        user_limit: params.userLimit,
+        storage_gb: params.storageGb,
+        plan_features: params.features,
       };
 
       const { error: dbError } = await this.saasSupabaseClient
@@ -155,8 +180,29 @@ export class PmsSaasService {
         }
       }
 
+      // 3. Attempt syncing subscription row to public.subscriptions table if present
+      try {
+        await this.saasSupabaseClient.from('subscriptions').upsert(
+          {
+            subdomain: params.subdomain,
+            user_email: email,
+            plan_name: params.planName ?? 'Standard',
+            branch_limit: params.branchLimit ?? 1,
+            user_limit: params.userLimit ?? 5,
+            storage_gb: params.storageGb ?? 5,
+            features: params.features ?? [],
+            status: params.status ?? 'active',
+            ends_at: params.endsAt ? new Date(params.endsAt).toISOString() : null,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: 'subdomain' },
+        );
+      } catch {
+        // Ignored if table doesn't exist
+      }
+
       this.logger.log(
-        `Successfully created/updated Superadmin account for ${email} (auth_id: ${authId}) on PMS SaaS DB.`,
+        `Successfully created/updated Superadmin account for ${email} (auth_id: ${authId}) with plan limits on PMS SaaS DB.`,
       );
 
       return {
@@ -173,6 +219,79 @@ export class PmsSaasService {
         email,
         error: msg,
       };
+    }
+  }
+
+  async syncPlanRestrictions(params: {
+    subdomain: string;
+    contactEmail?: string;
+    planName?: string;
+    branchLimit?: number;
+    userLimit?: number;
+    storageGb?: number;
+    features?: string[];
+    status?: string;
+    endsAt?: Date | string | null;
+  }): Promise<boolean> {
+    if (!this.saasSupabaseClient) return false;
+    try {
+      const email = params.contactEmail?.trim().toLowerCase();
+      if (email) {
+        const { data: usersData } = await this.saasSupabaseClient.auth.admin.listUsers();
+        const existingUser = (usersData?.users as Array<{ id: string; email?: string }> | undefined)?.find(
+          (u) => u.email?.toLowerCase() === email,
+        );
+        if (existingUser) {
+          await this.saasSupabaseClient.auth.admin.updateUserById(existingUser.id, {
+            app_metadata: {
+              role: 'super_admin',
+              subdomain: params.subdomain,
+              plan_name: params.planName,
+              branch_limit: params.branchLimit,
+              user_limit: params.userLimit,
+              storage_gb: params.storageGb,
+              features: params.features,
+              status: params.status,
+              ends_at: params.endsAt ? new Date(params.endsAt).toISOString() : null,
+            },
+          });
+
+          await this.saasSupabaseClient
+            .from('users')
+            .update({
+              subscription_plan: params.planName,
+              branch_limit: params.branchLimit,
+              user_limit: params.userLimit,
+              storage_gb: params.storageGb,
+              plan_features: params.features,
+            })
+            .eq('auth_id', existingUser.id);
+        }
+      }
+
+      try {
+        await this.saasSupabaseClient.from('subscriptions').upsert(
+          {
+            subdomain: params.subdomain,
+            plan_name: params.planName,
+            branch_limit: params.branchLimit,
+            user_limit: params.userLimit,
+            storage_gb: params.storageGb,
+            features: params.features,
+            status: params.status ?? 'active',
+            ends_at: params.endsAt ? new Date(params.endsAt).toISOString() : null,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: 'subdomain' },
+        );
+      } catch {
+        // Ignored
+      }
+
+      return true;
+    } catch (err) {
+      this.logger.error(`Error syncing plan restrictions to PMS SaaS DB: ${err}`);
+      return false;
     }
   }
 }
