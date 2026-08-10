@@ -55,6 +55,14 @@ export class ClientsController {
     return this.clientsService.upsertForTenant(tenantId, dto, actor);
   }
 
+  @Post(':id/send-welcome-email')
+  sendWelcomeEmail(
+    @Param('id') id: string,
+    @CurrentAdminUser() actor: AdminUser,
+  ) {
+    return this.clientsService.sendWelcomeEmail(id, actor);
+  }
+
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   remove(@Param('id') id: string, @CurrentAdminUser() actor: AdminUser) {
