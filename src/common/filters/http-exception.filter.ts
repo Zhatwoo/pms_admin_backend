@@ -39,6 +39,17 @@ export class HttpExceptionFilter implements ExceptionFilter {
       exception instanceof Error ? exception.stack : undefined,
     );
 
+    if (status === HttpStatus.UNAUTHORIZED) {
+      response.status(status).json({
+        statusCode: status,
+        message:
+          typeof message === 'string' && message.trim()
+            ? message
+            : 'Unauthorized request',
+      });
+      return;
+    }
+
     response.status(status).json({
       success: false,
       statusCode: status,
