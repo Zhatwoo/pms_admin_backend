@@ -25,8 +25,8 @@ export class MailService {
     const host = this.configService.get<string>('SMTP_HOST', 'smtp.gmail.com');
     const port = Number(this.configService.get<number>('SMTP_PORT', 465));
     const secure = this.configService.get<string>('SMTP_SECURE', 'true') === 'true';
-    const user = this.configService.get<string>('SMTP_USER', 'inspirenextglobal.marketing@gmail.com');
-    const pass = this.configService.get<string>('SMTP_PASS', 'yzzjsanvztjdrnpk');
+    const user = this.configService.get<string>('SMTP_USER');
+    const pass = this.configService.get<string>('SMTP_PASS');
 
     if (user && pass) {
       this.transporter = nodemailer.createTransport({
@@ -50,7 +50,7 @@ export class MailService {
     }
 
     const fromName = this.configService.get<string>('SMTP_FROM_NAME', 'Inspire Next Global - PMS SaaS');
-    const fromUser = this.configService.get<string>('SMTP_USER', 'inspirenextglobal.marketing@gmail.com');
+    const fromUser = this.configService.get<string>('SMTP_USER', '');
 
     const htmlContent = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; rounded: 8px; background-color: #ffffff;">
@@ -106,7 +106,7 @@ export class MailService {
     }
 
     const fromName = this.configService.get<string>('SMTP_FROM_NAME', 'Inspire Next Global - PMS SaaS');
-    const fromUser = this.configService.get<string>('SMTP_USER', 'inspirenextglobal.marketing@gmail.com');
+    const fromUser = this.configService.get<string>('SMTP_USER', '');
 
     const htmlContent = `
       <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; rounded: 8px; background-color: #ffffff;">

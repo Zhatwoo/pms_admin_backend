@@ -30,13 +30,15 @@ export class HttpExceptionFilter implements ExceptionFilter {
       } else {
         message = resObj;
       }
-    } else if (exception instanceof Error) {
-      message = exception.message;
+    } else {
+      // Non-HttpException (e.g. database errors, unhandled exceptions)
+      // Keep detailed message in server logs only, do not expose internal DB details to client
+      message = 'Internal server error';
     }
 
     this.logger.error(
       `${request.method} ${request.url} -> ${status}`,
-      exception instanceof Error ? exception.stack : undefined,
+      exception instanceof Error ? exception.stack : String(exception),
     );
 
     if (status === HttpStatus.UNAUTHORIZED) {
@@ -59,3 +61,4 @@ export class HttpExceptionFilter implements ExceptionFilter {
     });
   }
 }
+
