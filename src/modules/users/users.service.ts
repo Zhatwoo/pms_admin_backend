@@ -64,7 +64,9 @@ export class UsersService {
   findAllTenantUsers() {
     return this.prisma.tenantUser.findMany({
       orderBy: { createdAt: 'desc' },
-      include: { tenant: { select: { id: true, name: true, subdomain: true } } },
+      include: {
+        tenant: { select: { id: true, name: true, subdomain: true } },
+      },
     });
   }
 
@@ -98,7 +100,9 @@ export class UsersService {
   async remove(id: string, actor: AdminUser): Promise<void> {
     const user = await this.findOne(id);
     await this.prisma.adminUser.delete({ where: { id } });
-    await this.supabase.admin.auth.admin.deleteUser(user.authId).catch(() => {});
+    await this.supabase.admin.auth.admin
+      .deleteUser(user.authId)
+      .catch(() => {});
 
     await this.auditLogs.record({
       actorId: actor.id,

@@ -43,8 +43,7 @@ export class AuthGuard implements CanActivate {
     const accessToken =
       bearerToken || (req.cookies?.[ACCESS_TOKEN_COOKIE] as string | undefined);
     const refreshToken = req.cookies?.[REFRESH_TOKEN_COOKIE] as
-      | string
-      | undefined;
+      string | undefined;
 
     if (!accessToken && !refreshToken) {
       throw new UnauthorizedException('Unauthorized request');

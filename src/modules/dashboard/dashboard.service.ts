@@ -45,7 +45,9 @@ export class DashboardService {
       where: { id: { in: subscriptionsByPlanRaw.map((s) => s.planVersionId) } },
       include: { plan: true },
     });
-    const planNameByVersionId = new Map(planVersions.map((pv) => [pv.id, pv.plan.name]));
+    const planNameByVersionId = new Map(
+      planVersions.map((pv) => [pv.id, pv.plan.name]),
+    );
 
     return {
       overview: {
@@ -66,7 +68,8 @@ export class DashboardService {
         createdAt: tenant.createdAt.toISOString(),
         userCount: tenant.users.length,
         branchCount: tenant.branches.length,
-        subscriptionPlan: tenant.subscriptions[0]?.planVersion?.plan?.name ?? null,
+        subscriptionPlan:
+          tenant.subscriptions[0]?.planVersion?.plan?.name ?? null,
         subscriptionStatus: tenant.subscriptions[0]?.status ?? null,
       })),
     };

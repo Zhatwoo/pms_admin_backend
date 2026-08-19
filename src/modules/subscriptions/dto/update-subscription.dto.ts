@@ -1,5 +1,8 @@
 import { IsBoolean, IsEnum, IsOptional } from 'class-validator';
-import { BillingCycle, SubscriptionStatus } from '../../../../generated/prisma/client';
+import {
+  BillingCycle,
+  SubscriptionStatus,
+} from '../../../../generated/prisma/client';
 
 export class UpdateSubscriptionDto {
   @IsOptional()

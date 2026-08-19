@@ -22,12 +22,18 @@ export class HttpExceptionFilter implements ExceptionFilter {
         ? exception.getStatus()
         : HttpStatus.INTERNAL_SERVER_ERROR;
 
-    let message: any = 'Internal server error';
+    let message: string | string[] | Record<string, unknown> =
+      'Internal server error';
     if (exception instanceof HttpException) {
       const resObj = exception.getResponse();
-      if (typeof resObj === 'object' && resObj !== null && 'message' in resObj) {
-        message = (resObj as any).message;
-      } else {
+      if (
+        typeof resObj === 'object' &&
+        resObj !== null &&
+        'message' in resObj
+      ) {
+        message = (resObj as Record<string, unknown>).message as
+          string | string[];
+      } else if (typeof resObj === 'string') {
         message = resObj;
       }
     } else {
@@ -41,7 +47,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
       exception instanceof Error ? exception.stack : String(exception),
     );
 
-    if (status === HttpStatus.UNAUTHORIZED) {
+    if (status === Number(HttpStatus.UNAUTHORIZED)) {
       response.status(status).json({
         statusCode: status,
         message:
@@ -61,4 +67,3 @@ export class HttpExceptionFilter implements ExceptionFilter {
     });
   }
 }
-

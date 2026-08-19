@@ -27,7 +27,9 @@ export class RolesGuard implements CanActivate {
     const user = req.adminUser;
 
     if (!user) {
-      throw new ForbiddenException('Forbidden resource: user not authenticated');
+      throw new ForbiddenException(
+        'Forbidden resource: user not authenticated',
+      );
     }
 
     const hasRole = requiredRoles.includes(user.role);

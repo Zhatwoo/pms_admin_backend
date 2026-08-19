@@ -65,4 +65,3 @@ import { MailModule } from './modules/mail/mail.module';
   ],
 })
 export class AppModule {}
-

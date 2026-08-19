@@ -1,7 +1,10 @@
 import { Transform } from 'class-transformer';
 import { IsBoolean, IsEnum, IsOptional, IsString } from 'class-validator';
 import { PaginationDto } from '../../../common/dto/pagination.dto';
-import { BillingCycle, SubscriptionStatus } from '../../../../generated/prisma/client';
+import {
+  BillingCycle,
+  SubscriptionStatus,
+} from '../../../../generated/prisma/client';
 
 export class QuerySubscriptionDto extends PaginationDto {
   @IsOptional()

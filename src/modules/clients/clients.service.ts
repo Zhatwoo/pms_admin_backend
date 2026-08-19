@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import { UpsertClientDto } from './dto/upsert-client.dto';
@@ -30,7 +34,9 @@ export class ClientsService {
             { mobileNumber: { contains: search, mode: 'insensitive' } },
             { telephoneNumber: { contains: search, mode: 'insensitive' } },
             { tenant: { name: { contains: search, mode: 'insensitive' } } },
-            { tenant: { subdomain: { contains: search, mode: 'insensitive' } } },
+            {
+              tenant: { subdomain: { contains: search, mode: 'insensitive' } },
+            },
           ],
         }
       : {};
@@ -46,7 +52,9 @@ export class ClientsService {
             subdomain: true,
             status: true,
             createdAt: true,
-            _count: { select: { branches: true, users: true, customers: true } },
+            _count: {
+              select: { branches: true, users: true, customers: true },
+            },
             subscriptions: {
               orderBy: { createdAt: 'desc' },
               take: 1,
@@ -91,7 +99,9 @@ export class ClientsService {
               include: { planVersion: { include: { plan: true } } },
               orderBy: { createdAt: 'desc' },
             },
-            _count: { select: { customers: true, branches: true, users: true } },
+            _count: {
+              select: { customers: true, branches: true, users: true },
+            },
           },
         },
       },
@@ -103,7 +113,9 @@ export class ClientsService {
 
     const invoices = await this.prisma.invoice.findMany({
       where: { tenantId: client.tenantId },
-      include: { subscription: { include: { planVersion: { include: { plan: true } } } } },
+      include: {
+        subscription: { include: { planVersion: { include: { plan: true } } } },
+      },
       orderBy: { createdAt: 'desc' },
       take: 20,
     });
@@ -146,7 +158,9 @@ export class ClientsService {
 
   async create(dto: CreateClientDto, actor: AdminUser) {
     let tenantId = dto.tenantId;
-    const effectiveSubdomain = dto.noDomain ? null : (dto.subdomain?.trim() || null);
+    const effectiveSubdomain = dto.noDomain
+      ? null
+      : dto.subdomain?.trim() || null;
 
     if (!tenantId) {
       if (effectiveSubdomain) {
@@ -205,7 +219,7 @@ export class ClientsService {
             actor,
           );
         }
-      } catch (err) {
+      } catch {
         // Silently handle subscription assignment error
       }
     }
@@ -216,13 +230,20 @@ export class ClientsService {
       action: 'create',
       resourceType: 'client',
       resourceId: client.id,
-      metadata: { companyName: client.companyName, subdomain: effectiveSubdomain },
+      metadata: {
+        companyName: client.companyName,
+        subdomain: effectiveSubdomain,
+      },
     });
 
-    const isComplete = !!effectiveSubdomain && !!client.contactEmail && !!client.contactName;
+    const isComplete =
+      !!effectiveSubdomain && !!client.contactEmail && !!client.contactName;
 
     let emailSent = false;
-    let saasResult: SuperAdminCreationResult = { success: false, email: client.contactEmail };
+    let saasResult: SuperAdminCreationResult = {
+      success: false,
+      email: client.contactEmail,
+    };
 
     if (isComplete && effectiveSubdomain) {
       const planParams = await this.getTenantPlanParams(tenantId);
@@ -284,7 +305,7 @@ export class ClientsService {
     }
 
     if (dto.noDomain !== undefined || dto.subdomain !== undefined) {
-      const newSubdomain = dto.noDomain ? null : (dto.subdomain?.trim() || null);
+      const newSubdomain = dto.noDomain ? null : dto.subdomain?.trim() || null;
       await this.prisma.tenant.update({
         where: { id: tenantId },
         data: { subdomain: newSubdomain },
@@ -320,11 +341,18 @@ export class ClientsService {
           where: { tenantId, status: { in: ['active', 'trialing'] } },
         });
         if (existingSub) {
-          await this.subscriptionsService.changePlan(existingSub.id, { newPlanId: dto.planId }, actor);
+          await this.subscriptionsService.changePlan(
+            existingSub.id,
+            { newPlanId: dto.planId },
+            actor,
+          );
         } else {
-          await this.subscriptionsService.createSubscription({ tenantId, planId: dto.planId }, actor);
+          await this.subscriptionsService.createSubscription(
+            { tenantId, planId: dto.planId },
+            actor,
+          );
         }
-      } catch (err) {
+      } catch {
         // Silently handle subscription assignment error
       }
     }
@@ -389,7 +417,9 @@ export class ClientsService {
     });
 
     if (!emailSent) {
-      throw new BadRequestException('Failed to send email. Please check SMTP settings.');
+      throw new BadRequestException(
+        'Failed to send email. Please check SMTP settings.',
+      );
     }
 
     const updatedClient = await this.prisma.client.update({
@@ -407,11 +437,17 @@ export class ClientsService {
       action: 'update',
       resourceType: 'client',
       resourceId: client.id,
-      metadata: { action: 'send_welcome_email', welcomeEmailCount: updatedClient.welcomeEmailCount },
+      metadata: {
+        action: 'send_welcome_email',
+        welcomeEmailCount: updatedClient.welcomeEmailCount,
+      },
     });
 
     return {
-      message: updatedClient.welcomeEmailCount > 1 ? 'Welcome email resent successfully' : 'Welcome email sent successfully',
+      message:
+        updatedClient.welcomeEmailCount > 1
+          ? 'Welcome email resent successfully'
+          : 'Welcome email sent successfully',
       welcomeEmailSentAt: updatedClient.welcomeEmailSentAt,
       welcomeEmailCount: updatedClient.welcomeEmailCount,
       defaultPassword: saasResult.defaultPassword,

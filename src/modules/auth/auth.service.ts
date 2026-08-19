@@ -1,7 +1,4 @@
-import {
-  Injectable,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SupabaseService } from '../../supabase/supabase.service';
 import { AdminUserStatus } from '../../../generated/prisma/enums';
@@ -16,8 +13,10 @@ export class AuthService {
   ) {}
 
   async login(email: string, password: string) {
-    const { data, error } =
-      await this.supabase.admin.auth.signInWithPassword({ email, password });
+    const { data, error } = await this.supabase.admin.auth.signInWithPassword({
+      email,
+      password,
+    });
 
     if (error || !data.session || !data.user) {
       throw new UnauthorizedException('Invalid email or password');
@@ -57,8 +56,7 @@ export class AuthService {
   }
 
   async getProfileFromAccessToken(accessToken: string) {
-    const { data, error } =
-      await this.supabase.admin.auth.getUser(accessToken);
+    const { data, error } = await this.supabase.admin.auth.getUser(accessToken);
 
     if (error || !data.user) {
       throw new UnauthorizedException('Session expired');
@@ -76,8 +74,9 @@ export class AuthService {
   }
 
   async refreshSession(refreshToken: string) {
-    const { data, error } =
-      await this.supabase.admin.auth.refreshSession({ refresh_token: refreshToken });
+    const { data, error } = await this.supabase.admin.auth.refreshSession({
+      refresh_token: refreshToken,
+    });
 
     if (error || !data.session) {
       throw new UnauthorizedException('Session expired');

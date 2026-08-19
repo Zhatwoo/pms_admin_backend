@@ -55,8 +55,14 @@ export class PmsSaasService {
    * Generates default password: companyName (alphanumeric) + last 4 digits of contact phone.
    * Example: companyName = "Gold Pawn", contactPhone = "09171234567" => "GoldPawn4567"
    */
-  generateDefaultPassword(companyName: string, contactPhone?: string | null): string {
-    const cleanCompany = (companyName || 'Company').replace(/[^a-zA-Z0-9]/g, '');
+  generateDefaultPassword(
+    companyName: string,
+    contactPhone?: string | null,
+  ): string {
+    const cleanCompany = (companyName || 'Company').replace(
+      /[^a-zA-Z0-9]/g,
+      '',
+    );
     const phoneDigits = (contactPhone || '').replace(/\D/g, '');
     const last4 = phoneDigits.length >= 4 ? phoneDigits.slice(-4) : '1234';
 
@@ -113,13 +119,16 @@ export class PmsSaasService {
       if (createAuthError) {
         // If user already exists in auth.users, update user password & role
         if (/already|registered|exists/i.test(createAuthError.message)) {
-          this.logger.warn(`User ${email} already exists in Auth. Updating password and role...`);
+          this.logger.warn(
+            `User ${email} already exists in Auth. Updating password and role...`,
+          );
           const { data: usersData } =
             await this.saasSupabaseClient.auth.admin.listUsers();
-          
-          const existingUser = (usersData?.users as Array<{ id: string; email?: string }> | undefined)?.find(
-            (u) => u.email?.toLowerCase() === email,
-          );
+
+          const existingUser = (
+            usersData?.users as
+              Array<{ id: string; email?: string }> | undefined
+          )?.find((u) => u.email?.toLowerCase() === email);
           if (!existingUser) {
             throw new Error(`Failed to locate existing user ${email} in Auth.`);
           }
@@ -133,10 +142,14 @@ export class PmsSaasService {
             });
 
           if (updateAuthError) {
-            throw new Error(`Failed to update existing user auth: ${updateAuthError.message}`);
+            throw new Error(
+              `Failed to update existing user auth: ${updateAuthError.message}`,
+            );
           }
         } else {
-          throw new Error(`Supabase Auth user creation failed: ${createAuthError.message}`);
+          throw new Error(
+            `Supabase Auth user creation failed: ${createAuthError.message}`,
+          );
         }
       } else {
         if (!authData.user?.id) {
@@ -169,14 +182,18 @@ export class PmsSaasService {
         .upsert(userRow, { onConflict: 'auth_id' });
 
       if (dbError) {
-        this.logger.error(`Failed to upsert public.users row on PMS SaaS DB: ${dbError.message}`);
+        this.logger.error(
+          `Failed to upsert public.users row on PMS SaaS DB: ${dbError.message}`,
+        );
         // Attempt insert if upsert failed
         const { error: insertError } = await this.saasSupabaseClient
           .from('users')
           .insert(userRow);
-        
+
         if (insertError) {
-          this.logger.warn(`Fallback insert also returned: ${insertError.message}`);
+          this.logger.warn(
+            `Fallback insert also returned: ${insertError.message}`,
+          );
         }
       }
 
@@ -192,7 +209,9 @@ export class PmsSaasService {
             storage_gb: params.storageGb ?? 5,
             features: params.features ?? [],
             status: params.status ?? 'active',
-            ends_at: params.endsAt ? new Date(params.endsAt).toISOString() : null,
+            ends_at: params.endsAt
+              ? new Date(params.endsAt).toISOString()
+              : null,
             updated_at: new Date().toISOString(),
           },
           { onConflict: 'subdomain' },
@@ -213,7 +232,9 @@ export class PmsSaasService {
       };
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
-      this.logger.error(`Error creating Superadmin account on PMS SaaS: ${msg}`);
+      this.logger.error(
+        `Error creating Superadmin account on PMS SaaS: ${msg}`,
+      );
       return {
         success: false,
         email,
@@ -237,24 +258,30 @@ export class PmsSaasService {
     try {
       const email = params.contactEmail?.trim().toLowerCase();
       if (email) {
-        const { data: usersData } = await this.saasSupabaseClient.auth.admin.listUsers();
-        const existingUser = (usersData?.users as Array<{ id: string; email?: string }> | undefined)?.find(
-          (u) => u.email?.toLowerCase() === email,
-        );
+        const { data: usersData } =
+          await this.saasSupabaseClient.auth.admin.listUsers();
+        const existingUser = (
+          usersData?.users as Array<{ id: string; email?: string }> | undefined
+        )?.find((u) => u.email?.toLowerCase() === email);
         if (existingUser) {
-          await this.saasSupabaseClient.auth.admin.updateUserById(existingUser.id, {
-            app_metadata: {
-              role: 'super_admin',
-              subdomain: params.subdomain,
-              plan_name: params.planName,
-              branch_limit: params.branchLimit,
-              user_limit: params.userLimit,
-              storage_gb: params.storageGb,
-              features: params.features,
-              status: params.status,
-              ends_at: params.endsAt ? new Date(params.endsAt).toISOString() : null,
+          await this.saasSupabaseClient.auth.admin.updateUserById(
+            existingUser.id,
+            {
+              app_metadata: {
+                role: 'super_admin',
+                subdomain: params.subdomain,
+                plan_name: params.planName,
+                branch_limit: params.branchLimit,
+                user_limit: params.userLimit,
+                storage_gb: params.storageGb,
+                features: params.features,
+                status: params.status,
+                ends_at: params.endsAt
+                  ? new Date(params.endsAt).toISOString()
+                  : null,
+              },
             },
-          });
+          );
 
           await this.saasSupabaseClient
             .from('users')
@@ -279,7 +306,9 @@ export class PmsSaasService {
             storage_gb: params.storageGb,
             features: params.features,
             status: params.status ?? 'active',
-            ends_at: params.endsAt ? new Date(params.endsAt).toISOString() : null,
+            ends_at: params.endsAt
+              ? new Date(params.endsAt).toISOString()
+              : null,
             updated_at: new Date().toISOString(),
           },
           { onConflict: 'subdomain' },
@@ -290,7 +319,9 @@ export class PmsSaasService {
 
       return true;
     } catch (err) {
-      this.logger.error(`Error syncing plan restrictions to PMS SaaS DB: ${err}`);
+      this.logger.error(
+        `Error syncing plan restrictions to PMS SaaS DB: ${err}`,
+      );
       return false;
     }
   }

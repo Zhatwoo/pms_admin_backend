@@ -34,13 +34,18 @@ export class AuditLogsService {
     });
   }
 
-  async findAll(query: PaginationDto & { action?: string; resourceType?: string }) {
+  async findAll(
+    query: PaginationDto & { action?: string; resourceType?: string },
+  ) {
     const where: Prisma.AuditLogWhereInput = {};
     if (query.action) {
       where.action = query.action as AuditAction;
     }
     if (query.resourceType) {
-      where.resourceType = { contains: query.resourceType, mode: 'insensitive' };
+      where.resourceType = {
+        contains: query.resourceType,
+        mode: 'insensitive',
+      };
     }
 
     const [data, total] = await Promise.all([
