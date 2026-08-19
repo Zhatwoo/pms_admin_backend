@@ -1,13 +1,23 @@
-import { IsEmail, IsNotEmpty, IsOptional, IsString, Matches } from 'class-validator';
+import {
+  IsBoolean,
+  IsEmail,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+} from 'class-validator';
 
 export class CreateClientDto {
   @IsString()
   @IsNotEmpty()
   companyName: string;
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  subdomain: string;
+  subdomain?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  noDomain?: boolean;
 
   @IsString()
   @IsNotEmpty()
@@ -22,9 +32,21 @@ export class CreateClientDto {
 
   @IsOptional()
   @IsString()
+  mobileNumber?: string;
+
+  @IsOptional()
+  @IsString()
+  telephoneNumber?: string;
+
+  @IsOptional()
+  @IsString()
   billingAddress?: string;
 
   @IsOptional()
   @IsString()
   tenantId?: string;
+
+  @IsOptional()
+  @IsString()
+  planId?: string;
 }

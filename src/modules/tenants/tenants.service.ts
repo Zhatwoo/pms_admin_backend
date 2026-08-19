@@ -1,4 +1,9 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Prisma, AdminUser } from '../../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
@@ -8,15 +13,27 @@ import { UpdateTenantDto } from './dto/update-tenant.dto';
 import { CreateBranchDto } from './dto/create-branch.dto';
 import { CreateTenantUserDto } from './dto/create-tenant-user.dto';
 
+import { PmsSaasService } from '../clients/pms-saas.service';
+import { MailService } from '../mail/mail.service';
+
 @Injectable()
 export class TenantsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditLogs: AuditLogsService,
+    private readonly pmsSaasService: PmsSaasService,
+    private readonly mailService: MailService,
   ) {}
 
   async create(dto: CreateTenantDto, actor: AdminUser) {
-    const { companyName, contactName, contactEmail, contactPhone, billingAddress, ...tenantData } = dto;
+    const {
+      companyName,
+      contactName,
+      contactEmail,
+      contactPhone,
+      billingAddress,
+      ...tenantData
+    } = dto;
     const existing = await this.prisma.tenant.findUnique({
       where: { subdomain: tenantData.subdomain },
     });
@@ -53,6 +70,26 @@ export class TenantsService {
       metadata: { name: tenant.name, subdomain: tenant.subdomain },
     });
 
+    if (companyName && contactName && contactEmail && tenant.subdomain) {
+      const saasResult = await this.pmsSaasService.createSuperAdminAccount({
+        companyName,
+        contactName,
+        contactEmail,
+        contactPhone,
+        subdomain: tenant.subdomain,
+      });
+
+      if (saasResult.success && saasResult.defaultPassword) {
+        await this.mailService.sendSuperAdminCredentials({
+          toEmail: contactEmail,
+          contactName,
+          companyName,
+          subdomain: tenant.subdomain,
+          defaultPassword: saasResult.defaultPassword,
+        });
+      }
+    }
+
     return tenant;
   }
 
@@ -78,7 +115,7 @@ export class TenantsService {
           subscriptions: {
             orderBy: { createdAt: 'desc' },
             take: 1,
-            include: { plan: true },
+            include: { planVersion: { include: { plan: true } } },
           },
         },
       }),
@@ -95,7 +132,8 @@ export class TenantsService {
         userCount: tenant._count.users,
         branchCount: tenant._count.branches,
         client: tenant.client,
-        subscriptionPlan: tenant.subscriptions[0]?.plan.name ?? null,
+        subscriptionPlan:
+          tenant.subscriptions[0]?.planVersion?.plan?.name ?? null,
         subscriptionStatus: tenant.subscriptions[0]?.status ?? null,
       })),
       meta: {
@@ -114,7 +152,10 @@ export class TenantsService {
         client: true,
         branches: { orderBy: { createdAt: 'desc' } },
         users: { orderBy: { createdAt: 'desc' } },
-        subscriptions: { include: { plan: true }, orderBy: { createdAt: 'desc' } },
+        subscriptions: {
+          include: { planVersion: { include: { plan: true } } },
+          orderBy: { createdAt: 'desc' },
+        },
         _count: { select: { users: true, customers: true, branches: true } },
       },
     });
@@ -126,7 +167,10 @@ export class TenantsService {
 
   async update(id: string, dto: UpdateTenantDto, actor: AdminUser) {
     await this.ensureExists(id);
-    const tenant = await this.prisma.tenant.update({ where: { id }, data: dto });
+    const tenant = await this.prisma.tenant.update({
+      where: { id },
+      data: dto,
+    });
 
     await this.auditLogs.record({
       actorId: actor.id,
@@ -165,6 +209,29 @@ export class TenantsService {
 
   async addBranch(tenantId: string, dto: CreateBranchDto, actor: AdminUser) {
     await this.ensureExists(tenantId);
+
+    const activeSub = await this.prisma.subscription.findFirst({
+      where: { tenantId, status: { in: ['active', 'trialing'] } },
+      include: { planVersion: { include: { plan: true } } },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (activeSub) {
+      if (activeSub.endsAt && new Date() > new Date(activeSub.endsAt)) {
+        throw new ForbiddenException(
+          'Tenant subscription has expired. Please renew to add branches.',
+        );
+      }
+      const currentBranchCount = await this.prisma.branch.count({
+        where: { tenantId },
+      });
+      if (currentBranchCount >= activeSub.planVersion.branchLimit) {
+        throw new ForbiddenException(
+          `Branch creation limit (${activeSub.planVersion.branchLimit}) reached for subscription plan "${activeSub.planVersion.plan.name}". Upgrade plan to add more branches.`,
+        );
+      }
+    }
+
     const branch = await this.prisma.branch.create({
       data: { tenantId, name: dto.name },
     });
@@ -187,7 +254,9 @@ export class TenantsService {
       where: { id: branchId, tenantId },
     });
     if (!branch) {
-      throw new NotFoundException(`Branch ${branchId} not found under tenant ${tenantId}`);
+      throw new NotFoundException(
+        `Branch ${branchId} not found under tenant ${tenantId}`,
+      );
     }
 
     await this.prisma.branch.delete({ where: { id: branchId } });
@@ -217,7 +286,31 @@ export class TenantsService {
       where: { tenantId_email: { tenantId, email: dto.email } },
     });
     if (existing) {
-      throw new ConflictException(`User ${dto.email} already exists in this tenant.`);
+      throw new ConflictException(
+        `User ${dto.email} already exists in this tenant.`,
+      );
+    }
+
+    const activeSub = await this.prisma.subscription.findFirst({
+      where: { tenantId, status: { in: ['active', 'trialing'] } },
+      include: { planVersion: { include: { plan: true } } },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (activeSub) {
+      if (activeSub.endsAt && new Date() > new Date(activeSub.endsAt)) {
+        throw new ForbiddenException(
+          'Tenant subscription has expired. Please renew to add staff users.',
+        );
+      }
+      const currentUserCount = await this.prisma.tenantUser.count({
+        where: { tenantId },
+      });
+      if (currentUserCount >= activeSub.planVersion.userLimit) {
+        throw new ForbiddenException(
+          `Staff user creation limit (${activeSub.planVersion.userLimit}) reached for subscription plan "${activeSub.planVersion.plan.name}". Upgrade plan to add more users.`,
+        );
+      }
     }
 
     const user = await this.prisma.tenantUser.create({
@@ -242,7 +335,9 @@ export class TenantsService {
       where: { id: userId, tenantId },
     });
     if (!user) {
-      throw new NotFoundException(`Tenant user ${userId} not found under tenant ${tenantId}`);
+      throw new NotFoundException(
+        `Tenant user ${userId} not found under tenant ${tenantId}`,
+      );
     }
 
     await this.prisma.tenantUser.delete({ where: { id: userId } });

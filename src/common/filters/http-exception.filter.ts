@@ -22,22 +22,41 @@ export class HttpExceptionFilter implements ExceptionFilter {
         ? exception.getStatus()
         : HttpStatus.INTERNAL_SERVER_ERROR;
 
-    let message: any = 'Internal server error';
+    let message: string | string[] | Record<string, unknown> =
+      'Internal server error';
     if (exception instanceof HttpException) {
       const resObj = exception.getResponse();
-      if (typeof resObj === 'object' && resObj !== null && 'message' in resObj) {
-        message = (resObj as any).message;
-      } else {
+      if (
+        typeof resObj === 'object' &&
+        resObj !== null &&
+        'message' in resObj
+      ) {
+        message = (resObj as Record<string, unknown>).message as
+          string | string[];
+      } else if (typeof resObj === 'string') {
         message = resObj;
       }
-    } else if (exception instanceof Error) {
-      message = exception.message;
+    } else {
+      // Non-HttpException (e.g. database errors, unhandled exceptions)
+      // Keep detailed message in server logs only, do not expose internal DB details to client
+      message = 'Internal server error';
     }
 
     this.logger.error(
       `${request.method} ${request.url} -> ${status}`,
-      exception instanceof Error ? exception.stack : undefined,
+      exception instanceof Error ? exception.stack : String(exception),
     );
+
+    if (status === Number(HttpStatus.UNAUTHORIZED)) {
+      response.status(status).json({
+        statusCode: status,
+        message:
+          typeof message === 'string' && message.trim()
+            ? message
+            : 'Unauthorized request',
+      });
+      return;
+    }
 
     response.status(status).json({
       success: false,

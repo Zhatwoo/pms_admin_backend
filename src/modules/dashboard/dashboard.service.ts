@@ -23,7 +23,7 @@ export class DashboardService {
       this.prisma.transaction.count(),
       this.prisma.subscription.count({ where: { status: 'active' } }),
       this.prisma.subscription.groupBy({
-        by: ['planId'],
+        by: ['planVersionId'],
         _count: { _all: true },
       }),
       this.prisma.tenant.findMany({
@@ -35,16 +35,19 @@ export class DashboardService {
           subscriptions: {
             orderBy: { createdAt: 'desc' },
             take: 1,
-            include: { plan: true },
+            include: { planVersion: { include: { plan: true } } },
           },
         },
       }),
     ]);
 
-    const plans = await this.prisma.subscriptionPlan.findMany({
-      where: { id: { in: subscriptionsByPlanRaw.map((s) => s.planId) } },
+    const planVersions = await this.prisma.subscriptionPlanVersion.findMany({
+      where: { id: { in: subscriptionsByPlanRaw.map((s) => s.planVersionId) } },
+      include: { plan: true },
     });
-    const planNameById = new Map(plans.map((p) => [p.id, p.name]));
+    const planNameByVersionId = new Map(
+      planVersions.map((pv) => [pv.id, pv.plan.name]),
+    );
 
     return {
       overview: {
@@ -56,7 +59,7 @@ export class DashboardService {
         activeSubscriptions,
       },
       subscriptionsByPlan: subscriptionsByPlanRaw.map((row) => ({
-        planName: planNameById.get(row.planId) ?? 'Unknown',
+        planName: planNameByVersionId.get(row.planVersionId) ?? 'Unknown',
         count: row._count._all,
       })),
       recentTenants: recentTenants.map((tenant) => ({
@@ -65,7 +68,8 @@ export class DashboardService {
         createdAt: tenant.createdAt.toISOString(),
         userCount: tenant.users.length,
         branchCount: tenant.branches.length,
-        subscriptionPlan: tenant.subscriptions[0]?.plan.name ?? null,
+        subscriptionPlan:
+          tenant.subscriptions[0]?.planVersion?.plan?.name ?? null,
         subscriptionStatus: tenant.subscriptions[0]?.status ?? null,
       })),
     };
