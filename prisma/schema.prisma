@@ -28,11 +28,24 @@ enum TenantStatus {
   pending
 }
 
+enum BillingType {
+  monthly
+  annual
+  both
+}
+
+enum BillingCycle {
+  monthly
+  annual
+}
+
 enum SubscriptionStatus {
   active
   past_due
   canceled
   trialing
+  suspended
+  expired
 }
 
 enum InvoiceStatus {
@@ -70,7 +83,7 @@ model AdminUser {
 model Tenant {
   id            String         @id @default(uuid())
   name          String
-  subdomain     String         @unique
+  subdomain     String?        @unique
   status        TenantStatus   @default(pending)
   createdAt     DateTime       @default(now()) @map("created_at")
   updatedAt     DateTime       @updatedAt @map("updated_at")
@@ -86,15 +99,19 @@ model Tenant {
 
 /// The corporate/billing entity behind a tenant (contact person, billing address).
 model Client {
-  id            String   @id @default(uuid())
-  tenantId      String   @unique @map("tenant_id")
-  companyName   String   @map("company_name")
-  contactName   String   @map("contact_name")
-  contactEmail  String   @map("contact_email")
-  contactPhone  String?  @map("contact_phone")
-  billingAddress String? @map("billing_address")
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
+  id                 String    @id @default(uuid())
+  tenantId           String    @unique @map("tenant_id")
+  companyName        String    @map("company_name")
+  contactName        String    @map("contact_name")
+  contactEmail       String    @map("contact_email")
+  contactPhone       String?   @map("contact_phone")
+  mobileNumber       String?   @map("mobile_number")
+  telephoneNumber    String?   @map("telephone_number")
+  billingAddress     String?   @map("billing_address")
+  welcomeEmailSentAt DateTime? @map("welcome_email_sent_at")
+  welcomeEmailCount  Int       @default(0) @map("welcome_email_count")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
@@ -151,31 +168,128 @@ model Transaction {
 }
 
 model SubscriptionPlan {
-  id            String         @id @default(uuid())
-  name          String         @unique
-  priceMonthly  Decimal        @db.Decimal(12, 2) @map("price_monthly")
-  createdAt     DateTime       @default(now()) @map("created_at")
+  id               String                    @id @default(uuid())
+  name             String
+  slug             String                    @unique
+  description      String?
+  isActive         Boolean                   @default(true) @map("is_active")
+  visibleOnLanding Boolean                   @default(true) @map("visible_on_landing")
+  isDefault        Boolean                   @default(false) @map("is_default")
+  isPopular        Boolean                   @default(false) @map("is_popular")
+  createdAt        DateTime                  @default(now()) @map("created_at")
+  updatedAt        DateTime                  @updatedAt @map("updated_at")
+  deletedAt        DateTime?                 @map("deleted_at")
 
-  subscriptions Subscription[]
+  versions         SubscriptionPlanVersion[]
 
   @@map("subscription_plans")
 }
 
-model Subscription {
-  id        String              @id @default(uuid())
-  tenantId  String              @map("tenant_id")
-  planId    String              @map("plan_id")
-  status    SubscriptionStatus  @default(trialing)
-  startedAt DateTime            @default(now()) @map("started_at")
-  endsAt    DateTime?           @map("ends_at")
-  createdAt DateTime            @default(now()) @map("created_at")
-  updatedAt DateTime            @updatedAt @map("updated_at")
+model SubscriptionPlanVersion {
+  id                  String                      @id @default(uuid())
+  planId              String                      @map("plan_id")
+  versionNumber       Int                         @default(1) @map("version_number")
+  monthlyPrice        Decimal                     @db.Decimal(12, 2) @map("monthly_price")
+  annualPrice         Decimal                     @db.Decimal(12, 2) @map("annual_price")
+  currency            String                      @default("PHP")
+  billingType         BillingType                 @default(both) @map("billing_type")
+  trialEnabled        Boolean                     @default(false) @map("trial_enabled")
+  trialDays           Int                         @default(7) @map("trial_days")
+  
+  // Limits
+  branchLimit         Int                         @default(1) @map("branch_limit")
+  userLimit           Int                         @default(5) @map("user_limit")
+  storageGb           Decimal                     @default(5.0) @db.Decimal(8, 2) @map("storage_gb")
 
-  tenant   Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  plan     SubscriptionPlan @relation(fields: [planId], references: [id])
-  invoices Invoice[]
+  isActive            Boolean                     @default(true) @map("is_active")
+  createdAt           DateTime                    @default(now()) @map("created_at")
+
+  plan                SubscriptionPlan            @relation(fields: [planId], references: [id], onDelete: Cascade)
+  features            SubscriptionPlanFeature[]
+  inclusions          SubscriptionPlanInclusion[]
+  addons              SubscriptionPlanAddon[]
+  subscriptions       Subscription[]
+  history             SubscriptionHistory[]
+
+  @@unique([planId, versionNumber])
+  @@map("subscription_plan_versions")
+}
+
+model SubscriptionPlanFeature {
+  id            String                  @id @default(uuid())
+  planVersionId String                  @map("plan_version_id")
+  name          String
+  enabled       Boolean                 @default(true)
+  displayOrder  Int                     @default(0) @map("display_order")
+
+  planVersion   SubscriptionPlanVersion @relation(fields: [planVersionId], references: [id], onDelete: Cascade)
+
+  @@map("subscription_plan_features")
+}
+
+model SubscriptionPlanInclusion {
+  id            String                  @id @default(uuid())
+  planVersionId String                  @map("plan_version_id")
+  name          String
+  displayOrder  Int                     @default(0) @map("display_order")
+
+  planVersion   SubscriptionPlanVersion @relation(fields: [planVersionId], references: [id], onDelete: Cascade)
+
+  @@map("subscription_plan_inclusions")
+}
+
+model SubscriptionPlanAddon {
+  id            String                  @id @default(uuid())
+  planVersionId String                  @map("plan_version_id")
+  name          String
+  price         Decimal                 @db.Decimal(12, 2)
+  unit          String?
+  enabled       Boolean                 @default(true)
+  displayOrder  Int                     @default(0) @map("display_order")
+
+  planVersion   SubscriptionPlanVersion @relation(fields: [planVersionId], references: [id], onDelete: Cascade)
+
+  @@map("subscription_plan_addons")
+}
+
+model Subscription {
+  id            String                  @id @default(uuid())
+  tenantId      String                  @map("tenant_id")
+  planVersionId String                  @map("plan_version_id")
+  status        SubscriptionStatus      @default(trialing)
+  billingCycle  BillingCycle            @default(monthly) @map("billing_cycle")
+  autoRenew     Boolean                 @default(true) @map("auto_renew")
+  startedAt     DateTime                @default(now()) @map("started_at")
+  endsAt        DateTime?               @map("ends_at")
+  lastPaymentAt DateTime?               @map("last_payment_at")
+  
+  branchCount   Int                     @default(0) @map("branch_count")
+  userCount     Int                     @default(0) @map("user_count")
+  storageUsedGb Decimal                 @default(0.0) @db.Decimal(8, 2) @map("storage_used_gb")
+
+  createdAt     DateTime                @default(now()) @map("created_at")
+  updatedAt     DateTime                @updatedAt @map("updated_at")
+
+  tenant        Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  planVersion   SubscriptionPlanVersion @relation(fields: [planVersionId], references: [id])
+  invoices      Invoice[]
+  history       SubscriptionHistory[]
 
   @@map("subscriptions")
+}
+
+model SubscriptionHistory {
+  id             String                  @id @default(uuid())
+  subscriptionId String                  @map("subscription_id")
+  planVersionId  String                  @map("plan_version_id")
+  action         String
+  notes          String?
+  createdAt      DateTime                @default(now()) @map("created_at")
+
+  subscription   Subscription            @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  planVersion    SubscriptionPlanVersion @relation(fields: [planVersionId], references: [id])
+
+  @@map("subscription_history")
 }
 
 /// A billing invoice generated for a tenant's subscription period.

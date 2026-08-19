@@ -7,14 +7,13 @@ import {
   Post,
   Req,
   Res,
-  UseGuards,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
 import './auth.types';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
-import { AuthGuard } from './guards/auth.guard';
 import { CurrentAdminUser } from './decorators/current-admin-user.decorator';
+import { Public } from './decorators/public.decorator';
 import {
   ACCESS_TOKEN_COOKIE,
   clearSessionCookies,
@@ -26,6 +25,7 @@ import { AdminUser } from '../../../generated/prisma/client';
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
+  @Public()
   @Post('login')
   @HttpCode(HttpStatus.OK)
   async login(
@@ -41,7 +41,6 @@ export class AuthController {
   }
 
   @Get('me')
-  @UseGuards(AuthGuard)
   me(@CurrentAdminUser() adminUser: AdminUser) {
     return this.authService.toPublicUser(adminUser);
   }
@@ -50,8 +49,7 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const accessToken = req.cookies?.[ACCESS_TOKEN_COOKIE] as
-      | string
-      | undefined;
+      string | undefined;
     await this.authService.logout(accessToken);
     clearSessionCookies(res);
     return { success: true };

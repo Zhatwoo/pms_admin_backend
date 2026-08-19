@@ -1,7 +1,11 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
-import { AdminUser, InvoiceStatus, Prisma } from '../../../generated/prisma/client';
+import {
+  AdminUser,
+  InvoiceStatus,
+  Prisma,
+} from '../../../generated/prisma/client';
 import { PaginationDto } from '../../common/dto/pagination.dto';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
 
@@ -28,7 +32,12 @@ export class BillingService {
         skip: (query.page - 1) * query.limit,
         take: query.limit,
         include: {
-          subscription: { include: { tenant: { include: { client: true } }, plan: true } },
+          subscription: {
+            include: {
+              tenant: { include: { client: true } },
+              planVersion: { include: { plan: true } },
+            },
+          },
         },
       }),
       this.prisma.invoice.count({ where }),
@@ -41,7 +50,7 @@ export class BillingService {
         tenant: invoice.subscription.tenant.name,
         companyName: invoice.subscription.tenant.client?.companyName ?? null,
         contactEmail: invoice.subscription.tenant.client?.contactEmail ?? null,
-        plan: invoice.subscription.plan.name,
+        plan: invoice.subscription.planVersion.plan.name,
         amount: invoice.amount,
         status: invoice.status,
         periodStart: invoice.periodStart,
@@ -60,15 +69,21 @@ export class BillingService {
   async createInvoice(dto: CreateInvoiceDto, actor: AdminUser) {
     const sub = await this.prisma.subscription.findUnique({
       where: { id: dto.subscriptionId },
-      include: { tenant: true, plan: true },
+      include: { tenant: true, planVersion: { include: { plan: true } } },
     });
     if (!sub) {
-      throw new NotFoundException(`Subscription with id ${dto.subscriptionId} not found`);
+      throw new NotFoundException(
+        `Subscription with id ${dto.subscriptionId} not found`,
+      );
     }
 
     const now = new Date();
-    const periodStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-    const periodEnd = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0));
+    const periodStart = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1),
+    );
+    const periodEnd = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0),
+    );
 
     const invoice = await this.prisma.invoice.create({
       data: {
@@ -79,7 +94,11 @@ export class BillingService {
         periodStart,
         periodEnd,
       },
-      include: { subscription: { include: { tenant: true, plan: true } } },
+      include: {
+        subscription: {
+          include: { tenant: true, planVersion: { include: { plan: true } } },
+        },
+      },
     });
 
     await this.auditLogs.record({
@@ -106,7 +125,7 @@ export class BillingService {
 
     const activeSubscriptions = await this.prisma.subscription.findMany({
       where: { status: 'active' },
-      include: { plan: true },
+      include: { planVersion: true },
     });
 
     const created: string[] = [];
@@ -121,7 +140,10 @@ export class BillingService {
         data: {
           subscriptionId: sub.id,
           tenantId: sub.tenantId,
-          amount: sub.plan.priceMonthly,
+          amount:
+            sub.billingCycle === 'annual'
+              ? sub.planVersion.annualPrice
+              : sub.planVersion.monthlyPrice,
           status: 'pending',
           periodStart,
           periodEnd,
@@ -173,7 +195,7 @@ export class BillingService {
     const [mrrAgg, outstandingAgg, paidThisMonthAgg] = await Promise.all([
       this.prisma.subscription.findMany({
         where: { status: 'active' },
-        include: { plan: true },
+        include: { planVersion: true },
       }),
       this.prisma.invoice.aggregate({
         where: { status: 'pending' },
@@ -185,13 +207,14 @@ export class BillingService {
       }),
     ]);
 
-    const mrr = mrrAgg.reduce(
-      (sum, sub) => sum + Number(sub.plan.priceMonthly),
-      0,
-    );
+    const mrr = mrrAgg.reduce((sum, sub) => {
+      const monthly = Number(sub.planVersion.monthlyPrice);
+      const annual = Number(sub.planVersion.annualPrice);
+      return sum + (sub.billingCycle === 'annual' ? annual / 12 : monthly);
+    }, 0);
 
     return {
-      monthlyRecurringRevenue: mrr,
+      monthlyRecurringRevenue: Math.round(mrr),
       outstandingInvoices: Number(outstandingAgg._sum.amount ?? 0),
       collectedThisMonth: Number(paidThisMonthAgg._sum.amount ?? 0),
     };
