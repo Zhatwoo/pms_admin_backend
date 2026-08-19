@@ -1,10 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { createClient } from '@supabase/supabase-js';
 
 @Injectable()
 export class SupabaseService {
-  readonly admin: SupabaseClient;
+  readonly admin: ReturnType<typeof createClient>;
 
   constructor(configService: ConfigService) {
     const url = configService.getOrThrow<string>('SUPABASE_URL');

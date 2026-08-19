@@ -1,5 +1,14 @@
-import { IsBoolean, IsEnum, IsNotEmpty, IsOptional, IsString } from 'class-validator';
-import { BillingCycle, SubscriptionStatus } from '../../../../generated/prisma/client';
+import {
+  IsBoolean,
+  IsEnum,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+} from 'class-validator';
+import {
+  BillingCycle,
+  SubscriptionStatus,
+} from '../../../../generated/prisma/client';
 
 export class CreateSubscriptionDto {
   @IsString()

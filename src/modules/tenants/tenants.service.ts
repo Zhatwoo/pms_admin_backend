@@ -1,4 +1,9 @@
-import { ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Prisma, AdminUser } from '../../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
@@ -21,7 +26,14 @@ export class TenantsService {
   ) {}
 
   async create(dto: CreateTenantDto, actor: AdminUser) {
-    const { companyName, contactName, contactEmail, contactPhone, billingAddress, ...tenantData } = dto;
+    const {
+      companyName,
+      contactName,
+      contactEmail,
+      contactPhone,
+      billingAddress,
+      ...tenantData
+    } = dto;
     const existing = await this.prisma.tenant.findUnique({
       where: { subdomain: tenantData.subdomain },
     });
@@ -120,7 +132,8 @@ export class TenantsService {
         userCount: tenant._count.users,
         branchCount: tenant._count.branches,
         client: tenant.client,
-        subscriptionPlan: tenant.subscriptions[0]?.planVersion?.plan?.name ?? null,
+        subscriptionPlan:
+          tenant.subscriptions[0]?.planVersion?.plan?.name ?? null,
         subscriptionStatus: tenant.subscriptions[0]?.status ?? null,
       })),
       meta: {
@@ -139,7 +152,10 @@ export class TenantsService {
         client: true,
         branches: { orderBy: { createdAt: 'desc' } },
         users: { orderBy: { createdAt: 'desc' } },
-        subscriptions: { include: { planVersion: { include: { plan: true } } }, orderBy: { createdAt: 'desc' } },
+        subscriptions: {
+          include: { planVersion: { include: { plan: true } } },
+          orderBy: { createdAt: 'desc' },
+        },
         _count: { select: { users: true, customers: true, branches: true } },
       },
     });
@@ -151,7 +167,10 @@ export class TenantsService {
 
   async update(id: string, dto: UpdateTenantDto, actor: AdminUser) {
     await this.ensureExists(id);
-    const tenant = await this.prisma.tenant.update({ where: { id }, data: dto });
+    const tenant = await this.prisma.tenant.update({
+      where: { id },
+      data: dto,
+    });
 
     await this.auditLogs.record({
       actorId: actor.id,
@@ -199,9 +218,13 @@ export class TenantsService {
 
     if (activeSub) {
       if (activeSub.endsAt && new Date() > new Date(activeSub.endsAt)) {
-        throw new ForbiddenException('Tenant subscription has expired. Please renew to add branches.');
+        throw new ForbiddenException(
+          'Tenant subscription has expired. Please renew to add branches.',
+        );
       }
-      const currentBranchCount = await this.prisma.branch.count({ where: { tenantId } });
+      const currentBranchCount = await this.prisma.branch.count({
+        where: { tenantId },
+      });
       if (currentBranchCount >= activeSub.planVersion.branchLimit) {
         throw new ForbiddenException(
           `Branch creation limit (${activeSub.planVersion.branchLimit}) reached for subscription plan "${activeSub.planVersion.plan.name}". Upgrade plan to add more branches.`,
@@ -231,7 +254,9 @@ export class TenantsService {
       where: { id: branchId, tenantId },
     });
     if (!branch) {
-      throw new NotFoundException(`Branch ${branchId} not found under tenant ${tenantId}`);
+      throw new NotFoundException(
+        `Branch ${branchId} not found under tenant ${tenantId}`,
+      );
     }
 
     await this.prisma.branch.delete({ where: { id: branchId } });
@@ -261,7 +286,9 @@ export class TenantsService {
       where: { tenantId_email: { tenantId, email: dto.email } },
     });
     if (existing) {
-      throw new ConflictException(`User ${dto.email} already exists in this tenant.`);
+      throw new ConflictException(
+        `User ${dto.email} already exists in this tenant.`,
+      );
     }
 
     const activeSub = await this.prisma.subscription.findFirst({
@@ -272,9 +299,13 @@ export class TenantsService {
 
     if (activeSub) {
       if (activeSub.endsAt && new Date() > new Date(activeSub.endsAt)) {
-        throw new ForbiddenException('Tenant subscription has expired. Please renew to add staff users.');
+        throw new ForbiddenException(
+          'Tenant subscription has expired. Please renew to add staff users.',
+        );
       }
-      const currentUserCount = await this.prisma.tenantUser.count({ where: { tenantId } });
+      const currentUserCount = await this.prisma.tenantUser.count({
+        where: { tenantId },
+      });
       if (currentUserCount >= activeSub.planVersion.userLimit) {
         throw new ForbiddenException(
           `Staff user creation limit (${activeSub.planVersion.userLimit}) reached for subscription plan "${activeSub.planVersion.plan.name}". Upgrade plan to add more users.`,
@@ -304,7 +335,9 @@ export class TenantsService {
       where: { id: userId, tenantId },
     });
     if (!user) {
-      throw new NotFoundException(`Tenant user ${userId} not found under tenant ${tenantId}`);
+      throw new NotFoundException(
+        `Tenant user ${userId} not found under tenant ${tenantId}`,
+      );
     }
 
     await this.prisma.tenantUser.delete({ where: { id: userId } });

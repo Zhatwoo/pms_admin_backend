@@ -24,7 +24,8 @@ export class MailService {
   constructor(private readonly configService: ConfigService) {
     const host = this.configService.get<string>('SMTP_HOST', 'smtp.gmail.com');
     const port = Number(this.configService.get<number>('SMTP_PORT', 465));
-    const secure = this.configService.get<string>('SMTP_SECURE', 'true') === 'true';
+    const secure =
+      this.configService.get<string>('SMTP_SECURE', 'true') === 'true';
     const user = this.configService.get<string>('SMTP_USER');
     const pass = this.configService.get<string>('SMTP_PASS');
 
@@ -39,17 +40,26 @@ export class MailService {
         },
       });
     } else {
-      this.logger.warn('SMTP credentials not provided. Email dispatch will be skipped.');
+      this.logger.warn(
+        'SMTP credentials not provided. Email dispatch will be skipped.',
+      );
     }
   }
 
-  async sendSuperAdminCredentials(options: SendCredentialsMailOptions): Promise<boolean> {
+  async sendSuperAdminCredentials(
+    options: SendCredentialsMailOptions,
+  ): Promise<boolean> {
     if (!this.transporter) {
-      this.logger.warn(`Transporter not initialized. Cannot send credentials to ${options.toEmail}`);
+      this.logger.warn(
+        `Transporter not initialized. Cannot send credentials to ${options.toEmail}`,
+      );
       return false;
     }
 
-    const fromName = this.configService.get<string>('SMTP_FROM_NAME', 'Inspire Next Global - PMS SaaS');
+    const fromName = this.configService.get<string>(
+      'SMTP_FROM_NAME',
+      'Inspire Next Global - PMS SaaS',
+    );
     const fromUser = this.configService.get<string>('SMTP_USER', '');
 
     const htmlContent = `
@@ -84,28 +94,40 @@ export class MailService {
     `;
 
     try {
-      const info = await this.transporter.sendMail({
+      const info = (await this.transporter.sendMail({
         from: `"${fromName}" <${fromUser}>`,
         to: options.toEmail,
         subject: `Your PMS SaaS Superadmin Account Credentials - ${options.companyName}`,
         html: htmlContent,
-      });
+      })) as { messageId?: string };
 
-      this.logger.log(`Superadmin credentials email sent to ${options.toEmail}: ${info.messageId}`);
+      const messageId =
+        typeof info?.messageId === 'string' ? info.messageId : 'sent';
+      this.logger.log(
+        `Superadmin credentials email sent to ${options.toEmail}: ${messageId}`,
+      );
       return true;
     } catch (error) {
-      this.logger.error(`Failed to send credentials email to ${options.toEmail}:`, error);
+      this.logger.error(
+        `Failed to send credentials email to ${options.toEmail}:`,
+        error,
+      );
       return false;
     }
   }
 
   async sendPasswordOtpEmail(options: SendOtpMailOptions): Promise<boolean> {
     if (!this.transporter) {
-      this.logger.warn(`Transporter not initialized. Cannot send OTP to ${options.toEmail}`);
+      this.logger.warn(
+        `Transporter not initialized. Cannot send OTP to ${options.toEmail}`,
+      );
       return false;
     }
 
-    const fromName = this.configService.get<string>('SMTP_FROM_NAME', 'Inspire Next Global - PMS SaaS');
+    const fromName = this.configService.get<string>(
+      'SMTP_FROM_NAME',
+      'Inspire Next Global - PMS SaaS',
+    );
     const fromUser = this.configService.get<string>('SMTP_USER', '');
 
     const htmlContent = `
@@ -131,17 +153,24 @@ export class MailService {
     `;
 
     try {
-      const info = await this.transporter.sendMail({
+      const info = (await this.transporter.sendMail({
         from: `"${fromName}" <${fromUser}>`,
         to: options.toEmail,
         subject: `[${options.otpCode}] Password Change Verification Code - PMS SaaS`,
         html: htmlContent,
-      });
+      })) as { messageId?: string };
 
-      this.logger.log(`Password OTP email sent to ${options.toEmail}: ${info.messageId}`);
+      const messageId =
+        typeof info?.messageId === 'string' ? info.messageId : 'sent';
+      this.logger.log(
+        `Password OTP email sent to ${options.toEmail}: ${messageId}`,
+      );
       return true;
     } catch (error) {
-      this.logger.error(`Failed to send OTP email to ${options.toEmail}:`, error);
+      this.logger.error(
+        `Failed to send OTP email to ${options.toEmail}:`,
+        error,
+      );
       return false;
     }
   }

@@ -29,10 +29,7 @@ export class ClientsController {
   }
 
   @Post()
-  create(
-    @Body() dto: CreateClientDto,
-    @CurrentAdminUser() actor: AdminUser,
-  ) {
+  create(@Body() dto: CreateClientDto, @CurrentAdminUser() actor: AdminUser) {
     return this.clientsService.create(dto, actor);
   }
 

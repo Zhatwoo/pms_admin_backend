@@ -7,13 +7,11 @@ import {
   Post,
   Req,
   Res,
-  UseGuards,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
 import './auth.types';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
-import { AuthGuard } from './guards/auth.guard';
 import { CurrentAdminUser } from './decorators/current-admin-user.decorator';
 import { Public } from './decorators/public.decorator';
 import {
@@ -51,8 +49,7 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const accessToken = req.cookies?.[ACCESS_TOKEN_COOKIE] as
-      | string
-      | undefined;
+      string | undefined;
     await this.authService.logout(accessToken);
     clearSessionCookies(res);
     return { success: true };

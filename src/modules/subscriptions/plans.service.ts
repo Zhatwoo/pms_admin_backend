@@ -2,7 +2,6 @@ import {
   Injectable,
   NotFoundException,
   ConflictException,
-  BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
@@ -120,7 +119,7 @@ export class PlansService {
         metadata: { name: plan.name, slug: plan.slug, versionId: version.id },
       });
 
-      return this.findPlanById(plan.id);
+      return this.findPlanById(plan.id, tx);
     });
   }
 
@@ -221,8 +220,9 @@ export class PlansService {
     }));
   }
 
-  async findPlanById(id: string) {
-    const plan = await this.prisma.subscriptionPlan.findUnique({
+  async findPlanById(id: string, tx?: Prisma.TransactionClient) {
+    const client = tx ?? this.prisma;
+    const plan = await client.subscriptionPlan.findUnique({
       where: { id },
       include: {
         versions: {
@@ -241,7 +241,8 @@ export class PlansService {
       throw new NotFoundException(`Subscription plan with id ${id} not found`);
     }
 
-    const activeVersion = plan.versions.find((v) => v.isActive) ?? plan.versions[0] ?? null;
+    const activeVersion =
+      plan.versions.find((v) => v.isActive) ?? plan.versions[0] ?? null;
 
     return {
       id: plan.id,
@@ -309,13 +310,19 @@ export class PlansService {
         });
       }
 
-      const newSlug = dto.slug ? this.slugify(dto.slug) : dto.name ? this.slugify(dto.name) : existing.slug;
+      const newSlug = dto.slug
+        ? this.slugify(dto.slug)
+        : dto.name
+          ? this.slugify(dto.name)
+          : existing.slug;
       if (newSlug !== existing.slug) {
         const slugConflict = await tx.subscriptionPlan.findFirst({
           where: { slug: newSlug, id: { not: id } },
         });
         if (slugConflict) {
-          throw new ConflictException(`Plan slug "${newSlug}" is already in use`);
+          throw new ConflictException(
+            `Plan slug "${newSlug}" is already in use`,
+          );
         }
       }
 
@@ -324,10 +331,18 @@ export class PlansService {
         data: {
           name: dto.name ?? existing.name,
           slug: newSlug,
-          description: dto.description !== undefined ? dto.description : existing.description,
-          visibleOnLanding: dto.visibleOnLanding !== undefined ? dto.visibleOnLanding : existing.visibleOnLanding,
-          isDefault: dto.isDefault !== undefined ? dto.isDefault : existing.isDefault,
-          isPopular: dto.isPopular !== undefined ? dto.isPopular : existing.isPopular,
+          description:
+            dto.description !== undefined
+              ? dto.description
+              : existing.description,
+          visibleOnLanding:
+            dto.visibleOnLanding !== undefined
+              ? dto.visibleOnLanding
+              : existing.visibleOnLanding,
+          isDefault:
+            dto.isDefault !== undefined ? dto.isDefault : existing.isDefault,
+          isPopular:
+            dto.isPopular !== undefined ? dto.isPopular : existing.isPopular,
         },
       });
 
@@ -353,7 +368,8 @@ export class PlansService {
           data: { isActive: false },
         });
 
-        const newVersionNumber = (existing.allVersions[0]?.versionNumber ?? 0) + 1;
+        const newVersionNumber =
+          (existing.allVersions[0]?.versionNumber ?? 0) + 1;
 
         const newVersion = await tx.subscriptionPlanVersion.create({
           data: {
@@ -377,13 +393,24 @@ export class PlansService {
               })),
             },
             inclusions: {
-              create: (dto.inclusions ?? currentVer.inclusions).map((inc, idx) => ({
-                name: inc.name,
-                displayOrder: inc.displayOrder ?? idx,
-              })),
+              create: (dto.inclusions ?? currentVer.inclusions).map(
+                (inc, idx) => ({
+                  name: inc.name,
+                  displayOrder: inc.displayOrder ?? idx,
+                }),
+              ),
             },
             addons: {
-              create: (dto.addons ?? currentVer.addons).map((add, idx) => ({
+              create: (
+                dto.addons ??
+                (currentVer.addons as Array<{
+                  name: string;
+                  price: number;
+                  unit?: string | null;
+                  enabled?: boolean;
+                  displayOrder?: number;
+                }>)
+              ).map((add, idx) => ({
                 name: add.name,
                 price: add.price,
                 unit: add.unit,
@@ -413,7 +440,7 @@ export class PlansService {
         metadata: dto,
       });
 
-      return this.findPlanById(id);
+      return this.findPlanById(id, tx);
     });
   }
 
@@ -443,7 +470,10 @@ export class PlansService {
         metadata: { mode: 'soft-delete', activeSubscribers },
       });
 
-      return { softDeleted: true, message: `Plan "${plan.name}" deactivated (soft-deleted).` };
+      return {
+        softDeleted: true,
+        message: `Plan "${plan.name}" deactivated (soft-deleted).`,
+      };
     }
 
     // Hard delete if no active subscribers
@@ -475,9 +505,15 @@ export class PlansService {
           where: { isActive: true },
           take: 1,
           include: {
-            features: { where: { enabled: true }, orderBy: { displayOrder: 'asc' } },
+            features: {
+              where: { enabled: true },
+              orderBy: { displayOrder: 'asc' },
+            },
             inclusions: { orderBy: { displayOrder: 'asc' } },
-            addons: { where: { enabled: true }, orderBy: { displayOrder: 'asc' } },
+            addons: {
+              where: { enabled: true },
+              orderBy: { displayOrder: 'asc' },
+            },
             _count: { select: { subscriptions: true } },
           },
         },
@@ -539,7 +575,8 @@ export class PlansService {
 
     if (!popularPlanId && formattedPublicPlans.length > 0) {
       const middleIdx = Math.floor(formattedPublicPlans.length / 2);
-      popularPlanId = formattedPublicPlans[middleIdx]?.id ?? formattedPublicPlans[0]?.id;
+      popularPlanId =
+        formattedPublicPlans[middleIdx]?.id ?? formattedPublicPlans[0]?.id;
     }
 
     const finalPublicPlans = formattedPublicPlans.map((p, idx) => ({

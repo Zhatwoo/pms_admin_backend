@@ -9,7 +9,9 @@ function buildLastNMonths(n: number): string[] {
   const months: string[] = [];
   const now = new Date();
   for (let i = n - 1; i >= 0; i--) {
-    const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1));
+    const d = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1),
+    );
     months.push(monthKey(d));
   }
   return months;

@@ -1,7 +1,11 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
-import { AdminUser, InvoiceStatus, Prisma } from '../../../generated/prisma/client';
+import {
+  AdminUser,
+  InvoiceStatus,
+  Prisma,
+} from '../../../generated/prisma/client';
 import { PaginationDto } from '../../common/dto/pagination.dto';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
 
@@ -28,7 +32,12 @@ export class BillingService {
         skip: (query.page - 1) * query.limit,
         take: query.limit,
         include: {
-          subscription: { include: { tenant: { include: { client: true } }, planVersion: { include: { plan: true } } } },
+          subscription: {
+            include: {
+              tenant: { include: { client: true } },
+              planVersion: { include: { plan: true } },
+            },
+          },
         },
       }),
       this.prisma.invoice.count({ where }),
@@ -63,12 +72,18 @@ export class BillingService {
       include: { tenant: true, planVersion: { include: { plan: true } } },
     });
     if (!sub) {
-      throw new NotFoundException(`Subscription with id ${dto.subscriptionId} not found`);
+      throw new NotFoundException(
+        `Subscription with id ${dto.subscriptionId} not found`,
+      );
     }
 
     const now = new Date();
-    const periodStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-    const periodEnd = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0));
+    const periodStart = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1),
+    );
+    const periodEnd = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0),
+    );
 
     const invoice = await this.prisma.invoice.create({
       data: {
@@ -79,7 +94,11 @@ export class BillingService {
         periodStart,
         periodEnd,
       },
-      include: { subscription: { include: { tenant: true, planVersion: { include: { plan: true } } } } },
+      include: {
+        subscription: {
+          include: { tenant: true, planVersion: { include: { plan: true } } },
+        },
+      },
     });
 
     await this.auditLogs.record({
@@ -121,7 +140,10 @@ export class BillingService {
         data: {
           subscriptionId: sub.id,
           tenantId: sub.tenantId,
-          amount: sub.billingCycle === 'annual' ? sub.planVersion.annualPrice : sub.planVersion.monthlyPrice,
+          amount:
+            sub.billingCycle === 'annual'
+              ? sub.planVersion.annualPrice
+              : sub.planVersion.monthlyPrice,
           status: 'pending',
           periodStart,
           periodEnd,

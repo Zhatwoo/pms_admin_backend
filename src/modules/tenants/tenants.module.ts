@@ -12,4 +12,3 @@ import { ClientsModule } from '../clients/clients.module';
   exports: [TenantsService],
 })
 export class TenantsModule {}
-

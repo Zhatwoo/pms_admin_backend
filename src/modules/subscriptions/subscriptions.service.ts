@@ -100,7 +100,11 @@ export class SubscriptionsService {
         action: 'create',
         resourceType: 'subscription',
         resourceId: subscription.id,
-        metadata: { tenantId: dto.tenantId, planId: dto.planId, versionId: activeVersion.id },
+        metadata: {
+          tenantId: dto.tenantId,
+          planId: dto.planId,
+          versionId: activeVersion.id,
+        },
       });
     }
 
@@ -158,7 +162,11 @@ export class SubscriptionsService {
         OR: [
           { name: { contains: query.search, mode: 'insensitive' } },
           { subdomain: { contains: query.search, mode: 'insensitive' } },
-          { client: { companyName: { contains: query.search, mode: 'insensitive' } } },
+          {
+            client: {
+              companyName: { contains: query.search, mode: 'insensitive' },
+            },
+          },
         ],
       };
     }
@@ -231,7 +239,9 @@ export class SubscriptionsService {
             client: true,
             branches: true,
             users: true,
-            _count: { select: { branches: true, users: true, customers: true } },
+            _count: {
+              select: { branches: true, users: true, customers: true },
+            },
           },
         },
         planVersion: {
@@ -274,7 +284,10 @@ export class SubscriptionsService {
         currency: sub.planVersion.currency,
         features: sub.planVersion.features,
         inclusions: sub.planVersion.inclusions,
-        addons: sub.planVersion.addons.map((a) => ({ ...a, price: Number(a.price) })),
+        addons: sub.planVersion.addons.map((a) => ({
+          ...a,
+          price: Number(a.price),
+        })),
       },
       status: sub.status,
       billingCycle: sub.billingCycle,
@@ -283,9 +296,18 @@ export class SubscriptionsService {
       endsAt: sub.endsAt,
       lastPaymentAt: sub.lastPaymentAt,
       usage: {
-        branches: { current: sub.tenant._count.branches, limit: sub.planVersion.branchLimit },
-        users: { current: sub.tenant._count.users, limit: sub.planVersion.userLimit },
-        storage: { currentGb: Number(sub.storageUsedGb), limitGb: Number(sub.planVersion.storageGb) },
+        branches: {
+          current: sub.tenant._count.branches,
+          limit: sub.planVersion.branchLimit,
+        },
+        users: {
+          current: sub.tenant._count.users,
+          limit: sub.planVersion.userLimit,
+        },
+        storage: {
+          currentGb: Number(sub.storageUsedGb),
+          limitGb: Number(sub.planVersion.storageGb),
+        },
       },
       invoices: sub.invoices.map((inv) => ({
         id: inv.id,
@@ -347,7 +369,8 @@ export class SubscriptionsService {
       where: { id },
       include: { planVersion: { include: { plan: true } } },
     });
-    if (!currentSub) throw new NotFoundException(`Subscription ${id} not found`);
+    if (!currentSub)
+      throw new NotFoundException(`Subscription ${id} not found`);
 
     const newPlan = await this.prisma.subscriptionPlan.findUnique({
       where: { id: dto.newPlanId },
@@ -362,7 +385,9 @@ export class SubscriptionsService {
       throw new NotFoundException('Target plan has no active version');
     }
 
-    const isUpgrade = Number(newActiveVer.monthlyPrice) >= Number(currentSub.planVersion.monthlyPrice);
+    const isUpgrade =
+      Number(newActiveVer.monthlyPrice) >=
+      Number(currentSub.planVersion.monthlyPrice);
     const actionName = isUpgrade ? 'upgraded' : 'downgraded';
 
     const updated = await this.prisma.subscription.update({
@@ -375,7 +400,9 @@ export class SubscriptionsService {
           create: {
             planVersionId: newActiveVer.id,
             action: actionName,
-            notes: dto.notes ?? `${actionName.toUpperCase()} from ${currentSub.planVersion.plan.name} (v${currentSub.planVersion.versionNumber}) to ${newPlan.name} (v${newActiveVer.versionNumber})`,
+            notes:
+              dto.notes ??
+              `${actionName.toUpperCase()} from ${currentSub.planVersion.plan.name} (v${currentSub.planVersion.versionNumber}) to ${newPlan.name} (v${newActiveVer.versionNumber})`,
           },
         },
       },
@@ -388,7 +415,11 @@ export class SubscriptionsService {
       action: 'update',
       resourceType: 'subscription',
       resourceId: id,
-      metadata: { action: actionName, fromPlan: currentSub.planVersion.plan.name, toPlan: newPlan.name },
+      metadata: {
+        action: actionName,
+        fromPlan: currentSub.planVersion.plan.name,
+        toPlan: newPlan.name,
+      },
     });
 
     const fullNewVer = await this.prisma.subscriptionPlanVersion.findUnique({
@@ -491,7 +522,9 @@ export class SubscriptionsService {
       }),
       this.prisma.subscription.count({ where: { status: 'active' } }),
       this.prisma.subscription.count({ where: { status: 'trialing' } }),
-      this.prisma.subscription.count({ where: { status: { in: ['expired', 'canceled'] } } }),
+      this.prisma.subscription.count({
+        where: { status: { in: ['expired', 'canceled'] } },
+      }),
       this.prisma.subscription.count({
         where: {
           status: 'active',

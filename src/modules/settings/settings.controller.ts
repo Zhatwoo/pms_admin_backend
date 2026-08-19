@@ -20,11 +20,7 @@ export class SettingsController {
 
   @Patch()
   @Roles(AdminRole.super_admin)
-  update(
-    @Body() dto: UpdateSettingsDto,
-    @CurrentAdminUser() actor: AdminUser,
-  ) {
+  update(@Body() dto: UpdateSettingsDto, @CurrentAdminUser() actor: AdminUser) {
     return this.settingsService.update(dto, actor);
   }
 }
-
