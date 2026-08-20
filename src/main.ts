@@ -7,6 +7,10 @@ import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
 
 async function bootstrap() {
+  console.log('[startup] PORT=', process.env.PORT);
+  console.log('[startup] DATABASE_URL set=', Boolean(process.env.DATABASE_URL));
+  console.log('[startup] SUPABASE_URL set=', Boolean(process.env.SUPABASE_URL));
+
   const requiredEnv = [
     'DATABASE_URL',
     'SUPABASE_URL',
