@@ -24,11 +24,11 @@ async function bootstrap() {
     process.exit(1);
   }
 
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, { logger: ['error', 'warn', 'log'] });
   const configService = app.get(ConfigService);
 
   const apiPrefix = configService.get<string>('app.apiPrefix', 'api');
-  const port = configService.get<number>('app.port', 3000);
+  const port = Number(process.env.PORT ?? configService.get<number>('app.port', 8080));
   const corsOrigins = configService
     .get<string>('CORS_ORIGINS', 'http://localhost:3000')
     .split(',')
