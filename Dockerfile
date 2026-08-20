@@ -26,9 +26,7 @@ RUN npm ci --omit=dev --ignore-scripts
 
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/generated ./generated
-COPY scripts/start.sh ./scripts/start.sh
-RUN chmod +x ./scripts/start.sh
 
 EXPOSE 8080
 
-CMD ["./scripts/start.sh"]
+CMD ["node", "dist/src/main"]
