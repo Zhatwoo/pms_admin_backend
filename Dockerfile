@@ -11,7 +11,7 @@ RUN npm ci
 
 COPY nest-cli.json tsconfig*.json ./
 COPY src ./src/
-RUN npm run build && cp -r generated dist/generated
+RUN npm run build && cp -r generated dist/generated && test -f dist/generated/prisma/client.js
 
 FROM node:22-slim AS runner
 
@@ -26,7 +26,9 @@ RUN npm ci --omit=dev --ignore-scripts
 
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/generated ./generated
+COPY scripts/start.sh ./scripts/start.sh
+RUN chmod +x ./scripts/start.sh
 
 EXPOSE 8080
 
-CMD ["node", "dist/src/main"]
+CMD ["./scripts/start.sh"]
