@@ -1,18 +1,11 @@
-import { ValidationPipe } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { NestFactory } from '@nestjs/core';
-import { ExpressAdapter } from '@nestjs/platform-express';
-import cookieParser from 'cookie-parser';
 import express from 'express';
-import { AppModule } from './app.module';
-import { HttpExceptionFilter } from './common/filters/http-exception.filter';
-import { TransformInterceptor } from './common/interceptors/transform.interceptor';
 
 async function bootstrap() {
   const port = Number(process.env.PORT ?? 8080);
   const expressApp = express();
 
-  // Cloud Run requires the port to open quickly — do this before anything else.
+  // Cloud Run kills the revision if PORT is not bound quickly, so bind before
+  // loading the Nest module graph (Prisma's WASM client alone costs seconds).
   await new Promise<void>((resolve) => {
     expressApp.listen(port, '0.0.0.0', () => {
       console.log(`[startup] Listening on 0.0.0.0:${port}`);
@@ -39,7 +32,7 @@ async function bootstrap() {
       `[FATAL] Missing required environment variables: ${missing.join(', ')}`,
     );
     console.error(
-      '[FATAL] Add them in Cloud Run → Edit → Variables & Secrets, then redeploy.',
+      '[FATAL] Add them in Cloud Run -> Edit -> Variables & Secrets, then redeploy.',
     );
     expressApp.use((_req, res) => {
       res.status(503).json({
@@ -51,9 +44,33 @@ async function bootstrap() {
     return;
   }
 
-  const app = await NestFactory.create(AppModule, new ExpressAdapter(expressApp), {
-    logger: ['error', 'warn', 'log'],
-  });
+  const [
+    { ValidationPipe },
+    { ConfigService },
+    { NestFactory },
+    { ExpressAdapter },
+    cookieParser,
+    { AppModule },
+    { HttpExceptionFilter },
+    { TransformInterceptor },
+  ] = await Promise.all([
+    import('@nestjs/common'),
+    import('@nestjs/config'),
+    import('@nestjs/core'),
+    import('@nestjs/platform-express'),
+    import('cookie-parser').then((m) => m.default),
+    import('./app.module'),
+    import('./common/filters/http-exception.filter'),
+    import('./common/interceptors/transform.interceptor'),
+  ]);
+
+  console.log('[startup] modules loaded, initializing Nest');
+
+  const app = await NestFactory.create(
+    AppModule,
+    new ExpressAdapter(expressApp),
+    { logger: ['error', 'warn', 'log'] },
+  );
   const configService = app.get(ConfigService);
 
   const apiPrefix = configService.get<string>('app.apiPrefix', 'api');
