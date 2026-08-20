@@ -20,6 +20,7 @@ RUN apt-get update -y && apt-get install -y openssl ca-certificates && rm -rf /v
 WORKDIR /app
 
 ENV NODE_ENV=production
+ENV NODE_OPTIONS=--max-old-space-size=768
 
 COPY package*.json ./
 RUN npm ci --omit=dev --ignore-scripts
