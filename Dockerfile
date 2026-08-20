@@ -11,7 +11,9 @@ RUN npm ci
 
 COPY nest-cli.json tsconfig*.json ./
 COPY src ./src/
-RUN npm run build && cp -r generated dist/generated && test -f dist/generated/prisma/client.js
+RUN npm run build \
+  && test -f dist/generated/prisma/client.js \
+  && test -f dist/generated/prisma/internal/class.js
 
 FROM node:22-slim AS runner
 
