@@ -5,46 +5,18 @@ async function bootstrap() {
   const expressApp = express();
   let nestReady = false;
 
-  expressApp.get('/api/health', (_req, res) => {
-    res.status(200).json({
-      success: true,
-      statusCode: 200,
-      data: {
-        status: nestReady ? 'ok' : 'starting',
-        timestamp: new Date().toISOString(),
-      },
-    });
-  });
-
-  await new Promise<void>((resolve) => {
-    expressApp.listen(port, '0.0.0.0', () => {
-      console.log(`[startup] Listening on 0.0.0.0:${port}`);
-      resolve();
-    });
-  });
-
-  console.log('[startup] PORT=', process.env.PORT);
-  console.log('[startup] DATABASE_URL set=', Boolean(process.env.DATABASE_URL));
-  console.log('[startup] SUPABASE_URL set=', Boolean(process.env.SUPABASE_URL));
-  console.log(
-    '[startup] SUPABASE_SERVICE_ROLE_KEY set=',
-    Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY),
-  );
-
   const requiredEnv = [
     'DATABASE_URL',
     'SUPABASE_URL',
     'SUPABASE_SERVICE_ROLE_KEY',
   ];
   const missing = requiredEnv.filter((key) => !process.env[key]?.trim());
-  if (missing.length > 0) {
-    console.error(
-      `[FATAL] Missing required environment variables: ${missing.join(', ')}`,
-    );
-    return;
-  }
 
-  try {
+  async function initNest(): Promise<void> {
+    if (missing.length > 0) {
+      throw new Error(`Missing required environment variables: ${missing.join(', ')}`);
+    }
+
     const [
       { ValidationPipe },
       { ConfigService },
@@ -100,9 +72,55 @@ async function bootstrap() {
     await app.init();
     nestReady = true;
     console.log('[startup] Nest application ready');
-  } catch (error) {
-    console.error('[startup] Nest failed to initialize, keeping health endpoint up', error);
   }
+
+  const nestInit = initNest().catch((error) => {
+    console.error('[startup] Nest failed to initialize', error);
+    throw error;
+  });
+
+  expressApp.get('/api/health', (_req, res) => {
+    res.status(200).json({
+      success: true,
+      statusCode: 200,
+      data: {
+        status: nestReady ? 'ok' : 'starting',
+        timestamp: new Date().toISOString(),
+      },
+    });
+  });
+
+  expressApp.use(async (req, res, next) => {
+    if (req.path === '/api/health') {
+      next();
+      return;
+    }
+    try {
+      await nestInit;
+      next();
+    } catch (error) {
+      res.status(503).json({
+        status: 'error',
+        message: 'Application is still starting or failed to initialize',
+        detail: error instanceof Error ? error.message : String(error),
+      });
+    }
+  });
+
+  await new Promise<void>((resolve) => {
+    expressApp.listen(port, '0.0.0.0', () => {
+      console.log(`[startup] Listening on 0.0.0.0:${port}`);
+      resolve();
+    });
+  });
+
+  console.log('[startup] PORT=', process.env.PORT);
+  console.log('[startup] DATABASE_URL set=', Boolean(process.env.DATABASE_URL));
+  console.log('[startup] SUPABASE_URL set=', Boolean(process.env.SUPABASE_URL));
+  console.log(
+    '[startup] SUPABASE_SERVICE_ROLE_KEY set=',
+    Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY),
+  );
 }
 
 bootstrap().catch((error) => {
