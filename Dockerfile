@@ -9,7 +9,7 @@ RUN npm ci
 
 COPY nest-cli.json tsconfig*.json ./
 COPY src ./src/
-RUN npm run build
+RUN npm run build && cp -r generated dist/generated
 
 FROM node:22-alpine AS runner
 
