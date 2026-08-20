@@ -52,6 +52,7 @@ async function bootstrap() {
   });
 
   await app.listen(port, '0.0.0.0');
+  console.log(`[startup] Listening on 0.0.0.0:${port}`);
 }
 
 bootstrap().catch((error) => {
