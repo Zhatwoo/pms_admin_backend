@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaPg } from '@prisma/adapter-pg';
+import { Pool } from 'pg';
 import { PrismaClient } from '../../generated/prisma/client';
 
 @Injectable()
@@ -18,11 +19,21 @@ export class PrismaService
 
   constructor(configService: ConfigService) {
     const connectionString = configService.get<string>('DATABASE_URL');
-    const adapter = new PrismaPg({ connectionString });
+    const pool = new Pool({
+      connectionString,
+      connectionTimeoutMillis: 10_000,
+      max: 5,
+    });
+    const adapter = new PrismaPg(pool);
     super({ adapter });
   }
 
-  async onModuleInit(): Promise<void> {
+  onModuleInit(): void {
+    // Do not block HTTP startup on DB connectivity (Cloud Run probes port 8080).
+    void this.connectToDatabase();
+  }
+
+  private async connectToDatabase(): Promise<void> {
     try {
       await this.$connect();
       this.logger.log('Connected to database');
