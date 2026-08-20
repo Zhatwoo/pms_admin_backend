@@ -7,6 +7,19 @@ import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
 
 async function bootstrap() {
+  const requiredEnv = [
+    'DATABASE_URL',
+    'SUPABASE_URL',
+    'SUPABASE_SERVICE_ROLE_KEY',
+  ];
+  const missing = requiredEnv.filter((key) => !process.env[key]?.trim());
+  if (missing.length > 0) {
+    console.error(
+      `[FATAL] Missing required environment variables: ${missing.join(', ')}`,
+    );
+    process.exit(1);
+  }
+
   const app = await NestFactory.create(AppModule);
   const configService = app.get(ConfigService);
 
