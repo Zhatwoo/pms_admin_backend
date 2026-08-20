@@ -1,9 +1,17 @@
 import express from 'express';
 
+process.on('unhandledRejection', (reason) => {
+  console.error('[startup] unhandledRejection', reason);
+});
+process.on('uncaughtException', (error) => {
+  console.error('[startup] uncaughtException', error);
+});
+
 async function bootstrap() {
   const port = Number(process.env.PORT ?? 8080);
   const expressApp = express();
   let nestReady = false;
+  let nestInit: Promise<void> | null = null;
 
   const requiredEnv = [
     'DATABASE_URL',
@@ -14,7 +22,9 @@ async function bootstrap() {
 
   async function initNest(): Promise<void> {
     if (missing.length > 0) {
-      throw new Error(`Missing required environment variables: ${missing.join(', ')}`);
+      throw new Error(
+        `Missing required environment variables: ${missing.join(', ')}`,
+      );
     }
 
     const [
@@ -74,10 +84,16 @@ async function bootstrap() {
     console.log('[startup] Nest application ready');
   }
 
-  const nestInit = initNest().catch((error) => {
-    console.error('[startup] Nest failed to initialize', error);
-    throw error;
-  });
+  function ensureNest(): Promise<void> {
+    if (!nestInit) {
+      nestInit = initNest().catch((error) => {
+        nestInit = null;
+        console.error('[startup] Nest failed to initialize', error);
+        throw error;
+      });
+    }
+    return nestInit;
+  }
 
   expressApp.get('/api/health', (_req, res) => {
     res.status(200).json({
@@ -96,12 +112,12 @@ async function bootstrap() {
       return;
     }
     try {
-      await nestInit;
+      await ensureNest();
       next();
     } catch (error) {
       res.status(503).json({
         status: 'error',
-        message: 'Application is still starting or failed to initialize',
+        message: 'Application failed to initialize',
         detail: error instanceof Error ? error.message : String(error),
       });
     }
